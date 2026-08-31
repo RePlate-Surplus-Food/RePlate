@@ -101,11 +101,11 @@ struct HomeView: View {
                 .padding(.bottom, 24)
 
                 // Bold headline
-                Text("Feed your \(Text("belly").foregroundColor(Theme.Colors.primaryGradientStart).italic())")
+                Text("Feed your \(Text("belly").foregroundStyle(Theme.Colors.primaryGradient).italic())")
                     .font(.system(size: 36, weight: .heavy, design: .rounded))
                     .foregroundColor(Theme.Colors.label)
 
-                Text("save the \(Text("world.").foregroundColor(Theme.Colors.primaryGradientStart).italic())")
+                Text("save the \(Text("world.").foregroundStyle(Theme.Colors.primaryGradient).italic())")
                     .font(.system(size: 36, weight: .heavy, design: .rounded))
                     .foregroundColor(Theme.Colors.label)
                     .padding(.bottom, 20)
@@ -135,7 +135,17 @@ struct HomeView: View {
             }
             .padding(.horizontal, 20)
         }
-        .background(Color(.systemBackground))
+        .background(
+            LinearGradient(
+                colors: [
+                    Theme.Colors.primaryGradientStart.opacity(0.10),
+                    Theme.Colors.primaryGradientEnd.opacity(0.05),
+                    Color(.systemBackground)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
 
     // MARK: - Categories

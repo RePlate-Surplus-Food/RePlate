@@ -7,7 +7,6 @@
 
 import SwiftUI
 import UIKit
-import AudioToolbox
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
@@ -63,7 +62,6 @@ struct SplashScreenView: View {
                     if showRays { DingRays() }
 
                     RePlateIconView(size: 180)
-                        .colorMultiply(Color(hex: "1a5c35"))
                         .scaleEffect(logoScale)
                         .opacity(logoOpacity)
                         .keyframeAnimator(
@@ -83,13 +81,13 @@ struct SplashScreenView: View {
 
                 Text("RePlate")
                     .font(.system(size: 40, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "1a5c35"))
+                    .foregroundColor(.white)
                     .offset(y: titleOffset)
                     .opacity(titleOpacity)
 
                 Text("Rescue food. Save the planet.")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(hex: "2d7d50"))
+                    .foregroundColor(.white.opacity(0.80))
                     .opacity(taglineOpacity)
             }
         }
@@ -127,7 +125,7 @@ private struct DingRays: View {
         ZStack {
             ForEach(0..<8) { i in
                 Capsule()
-                    .fill(Color(hex: "2d7d50"))
+                    .fill(Color.white.opacity(0.90))
                     .frame(width: 2.5, height: length)
                     .offset(y: -radius)
                     .rotationEffect(.degrees(Double(i) * 45))
@@ -150,38 +148,43 @@ private struct SplashBlobBackground: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "c8eeda").ignoresSafeArea() // pastel mint base
+            // Rich forest green base gradient
+            LinearGradient(
+                colors: [Theme.Colors.primaryDark, Theme.Colors.primaryGradientStart],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ).ignoresSafeArea()
 
-            // Blob 1 — soft sage
+            // Blob 1 — teal burst
             Circle()
-                .fill(Color(hex: "a0d9b8").opacity(0.85))
-                .frame(width: 380)
-                .blur(radius: 75)
+                .fill(Theme.Colors.primaryGradientEnd.opacity(0.70))
+                .frame(width: 400)
+                .blur(radius: 80)
                 .offset(x: phase ? -55 : 70, y: phase ? -200 : -100)
                 .animation(.easeInOut(duration: 8).repeatForever(autoreverses: true), value: phase)
 
-            // Blob 2 — pale green
+            // Blob 2 — lime accent glow
             Circle()
-                .fill(Color(hex: "b8eacc").opacity(0.8))
-                .frame(width: 300)
-                .blur(radius: 70)
-                .offset(x: phase ? 110 : -80, y: phase ? 140 : 230)
+                .fill(Theme.Colors.accent.opacity(0.55))
+                .frame(width: 320)
+                .blur(radius: 75)
+                .offset(x: phase ? 110 : -80, y: phase ? 140 : 250)
                 .animation(.easeInOut(duration: 10).repeatForever(autoreverses: true), value: phase)
 
-            // Blob 3 — light mint
+            // Blob 3 — primary light shimmer
             Circle()
-                .fill(Color(hex: "d4f4e4").opacity(0.7))
-                .frame(width: 260)
-                .blur(radius: 65)
-                .offset(x: phase ? -110 : 90, y: phase ? 50 : -130)
+                .fill(Theme.Colors.primaryLight.opacity(0.60))
+                .frame(width: 280)
+                .blur(radius: 70)
+                .offset(x: phase ? -120 : 90, y: phase ? 60 : -140)
                 .animation(.easeInOut(duration: 7).repeatForever(autoreverses: true).delay(1), value: phase)
 
-            // Blob 4 — medium pastel green
+            // Blob 4 — deep dark contrast
             Circle()
-                .fill(Color(hex: "8ecfaa").opacity(0.75))
-                .frame(width: 220)
-                .blur(radius: 60)
-                .offset(x: phase ? 130 : -50, y: phase ? -80 : 160)
+                .fill(Theme.Colors.primaryDark.opacity(0.65))
+                .frame(width: 240)
+                .blur(radius: 65)
+                .offset(x: phase ? 140 : -50, y: phase ? -90 : 170)
                 .animation(.easeInOut(duration: 9).repeatForever(autoreverses: true).delay(0.5), value: phase)
         }
         .onAppear { phase = true }

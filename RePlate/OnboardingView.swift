@@ -44,6 +44,7 @@ struct OnboardingView: View {
     @State private var currentPage = 0
     @State private var showAuth    = false
     @State private var showSignIn  = false
+    @State private var blobPhase   = false
 
     private let pages: [OnboardingPageData] = [
         .init(
@@ -89,7 +90,15 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            Color(.systemBackground).ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    Theme.Colors.primaryGradientStart.opacity(0.07),
+                    Theme.Colors.primaryGradientEnd.opacity(0.03),
+                    Color(.systemBackground)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ).ignoresSafeArea()
             blobBackground
             VStack(spacing: 0) {
                 skipRow
@@ -195,26 +204,37 @@ struct OnboardingView: View {
 
     private var blobBackground: some View {
         ZStack {
+            // Top-left: deep green
             Circle()
-                .fill(LinearGradient(
-                    colors: [Theme.Colors.primaryGradientStart.opacity(0.25),
-                             Theme.Colors.primaryGradientEnd.opacity(0.20)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ))
-                .frame(width: 280, height: 280)
+                .fill(Theme.Colors.primaryGradientStart.opacity(0.45))
+                .frame(width: 340)
+                .blur(radius: 75)
+                .offset(x: blobPhase ? -100 : -60, y: blobPhase ? -240 : -180)
+                .animation(.easeInOut(duration: 9).repeatForever(autoreverses: true), value: blobPhase)
+            // Bottom-right: teal
+            Circle()
+                .fill(Theme.Colors.primaryGradientEnd.opacity(0.50))
+                .frame(width: 320)
+                .blur(radius: 70)
+                .offset(x: blobPhase ? 150 : 100, y: blobPhase ? 360 : 290)
+                .animation(.easeInOut(duration: 11).repeatForever(autoreverses: true), value: blobPhase)
+            // Bottom-left: lime accent
+            Circle()
+                .fill(Theme.Colors.accent.opacity(0.55))
+                .frame(width: 270)
+                .blur(radius: 65)
+                .offset(x: blobPhase ? -130 : -80, y: blobPhase ? 280 : 340)
+                .animation(.easeInOut(duration: 8).repeatForever(autoreverses: true).delay(1), value: blobPhase)
+            // Top-right: primary light
+            Circle()
+                .fill(Theme.Colors.primaryLight.opacity(0.42))
+                .frame(width: 220)
                 .blur(radius: 60)
-                .offset(x: -100, y: -200)
-            Circle()
-                .fill(LinearGradient(
-                    colors: [Theme.Colors.accent.opacity(0.25),
-                             Theme.Colors.primaryGradientEnd.opacity(0.20)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ))
-                .frame(width: 240, height: 240)
-                .blur(radius: 50)
-                .offset(x: 120, y: 300)
+                .offset(x: blobPhase ? 160 : 110, y: blobPhase ? -190 : -130)
+                .animation(.easeInOut(duration: 10).repeatForever(autoreverses: true).delay(0.5), value: blobPhase)
         }
         .ignoresSafeArea()
+        .onAppear { blobPhase = true }
     }
 }
 
