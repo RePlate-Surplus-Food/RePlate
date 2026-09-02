@@ -59,6 +59,9 @@ struct SplashScreenView: View {
 
             VStack(spacing: 22) {
                 ZStack {
+                    // Animated wisps directly behind the logo
+                    LogoWisps()
+
                     if showRays { DingRays() }
 
                     RePlateIconView(size: 180)
@@ -142,52 +145,45 @@ private struct DingRays: View {
     }
 }
 
-// MARK: - Animated Blob Background
-private struct SplashBlobBackground: View {
+// MARK: - Logo Wisps (animated blobs behind the logo)
+private struct LogoWisps: View {
     @State private var phase = false
 
     var body: some View {
         ZStack {
-            // Rich forest green base gradient
-            LinearGradient(
-                colors: [Theme.Colors.primaryDark, Theme.Colors.primaryGradientStart],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ).ignoresSafeArea()
-
-            // Blob 1 — teal burst
             Circle()
-                .fill(Theme.Colors.primaryGradientEnd.opacity(0.70))
-                .frame(width: 400)
-                .blur(radius: 80)
-                .offset(x: phase ? -55 : 70, y: phase ? -200 : -100)
+                .fill(Theme.Colors.primaryGradientEnd.opacity(0.75))
+                .frame(width: 260)
+                .blur(radius: 55)
+                .offset(x: phase ? -40 : 40, y: phase ? -30 : 30)
+                .animation(.easeInOut(duration: 6).repeatForever(autoreverses: true), value: phase)
+
+            Circle()
+                .fill(Theme.Colors.accent.opacity(0.65))
+                .frame(width: 220)
+                .blur(radius: 50)
+                .offset(x: phase ? 45 : -35, y: phase ? 25 : -35)
                 .animation(.easeInOut(duration: 8).repeatForever(autoreverses: true), value: phase)
 
-            // Blob 2 — lime accent glow
-            Circle()
-                .fill(Theme.Colors.accent.opacity(0.55))
-                .frame(width: 320)
-                .blur(radius: 75)
-                .offset(x: phase ? 110 : -80, y: phase ? 140 : 250)
-                .animation(.easeInOut(duration: 10).repeatForever(autoreverses: true), value: phase)
-
-            // Blob 3 — primary light shimmer
             Circle()
                 .fill(Theme.Colors.primaryLight.opacity(0.60))
-                .frame(width: 280)
-                .blur(radius: 70)
-                .offset(x: phase ? -120 : 90, y: phase ? 60 : -140)
-                .animation(.easeInOut(duration: 7).repeatForever(autoreverses: true).delay(1), value: phase)
-
-            // Blob 4 — deep dark contrast
-            Circle()
-                .fill(Theme.Colors.primaryDark.opacity(0.65))
-                .frame(width: 240)
-                .blur(radius: 65)
-                .offset(x: phase ? 140 : -50, y: phase ? -90 : 170)
-                .animation(.easeInOut(duration: 9).repeatForever(autoreverses: true).delay(0.5), value: phase)
+                .frame(width: 190)
+                .blur(radius: 45)
+                .offset(x: phase ? -30 : 50, y: phase ? 40 : -20)
+                .animation(.easeInOut(duration: 7).repeatForever(autoreverses: true).delay(0.8), value: phase)
         }
         .onAppear { phase = true }
+    }
+}
+
+// MARK: - Animated Blob Background
+private struct SplashBlobBackground: View {
+    var body: some View {
+        LinearGradient(
+            colors: [Theme.Colors.primaryDark, Theme.Colors.primaryGradientStart],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        ).ignoresSafeArea()
     }
 }
 

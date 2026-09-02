@@ -48,10 +48,8 @@
     <string>RePlate would like to save photos to your library.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>RePlate uses your location to show you nearby surplus food listings and help customers find your restaurant.</string>
-    <key>NSLocationAlwaysUsageDescription</key>
-    <string>RePlate uses your location to provide accurate pickup information and show relevant food listings near you.</string>
-    <key>NSUserNotificationsUsageDescription</key>
-    <string>RePlate sends notifications about new listings, order updates, and pickup reminders.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>RePlate uses your location in the background to send timely pickup reminders and show relevant food listings near you.</string>
     
     <!-- App Transport Security -->
     <key>NSAppTransportSecurity</key>
