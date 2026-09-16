@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Supabase
 
 struct MessagesView: View {
     @StateObject private var viewModel = MessagesViewModel()
