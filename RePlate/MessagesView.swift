@@ -7,14 +7,6 @@
 
 import SwiftUI
 
-// In-memory message store keyed by conversation ID — survives sheet dismissal within the session
-private final class MessageStore {
-    static let shared = MessageStore()
-    private var store: [String: [Message]] = [:]
-    func messages(for id: String) -> [Message] { store[id, default: []] }
-    func append(_ message: Message, to id: String) { store[id, default: []].append(message) }
-}
-
 struct MessagesView: View {
     @StateObject private var viewModel = MessagesViewModel()
     @State private var selectedConversation: Conversation?
@@ -135,9 +127,12 @@ struct MessagesView: View {
 struct ConversationRow: View {
     let conversation: Conversation
 
+    private var displayName: String {
+        conversation.restaurantName ?? conversation.order?.restaurant?.name ?? "Unknown Restaurant"
+    }
+
     private var initials: String {
-        let name = conversation.order?.restaurant?.name ?? "?"
-        return String(name.prefix(1)).uppercased()
+        String(displayName.prefix(1)).uppercased()
     }
 
     var body: some View {
@@ -154,11 +149,9 @@ struct ConversationRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    if let restaurant = conversation.order?.restaurant {
-                        Text(restaurant.name)
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundColor(Theme.Colors.label)
-                    }
+                    Text(displayName)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(Theme.Colors.label)
 
                     Spacer()
 
@@ -204,8 +197,8 @@ struct ConversationView: View {
     let conversation: Conversation
     @State private var messageText   = ""
     @State private var messages: [Message] = []
+    @State private var currentUserId = ""
     @State private var showOrderInfo = false
-    private var conversationKey: String { conversation.id }
     // §1.2: UGC — must provide report/block mechanism for all user-generated messaging
     @State private var showReportMenu   = false
     @State private var showBlockConfirm = false
@@ -223,7 +216,7 @@ struct ConversationView: View {
     }
 
     private var restaurantName: String {
-        conversation.order?.restaurant?.name ?? "User"
+        conversation.restaurantName ?? conversation.order?.restaurant?.name ?? "User"
     }
 
     var body: some View {
@@ -244,7 +237,7 @@ struct ConversationView: View {
                                 .padding(.top, Theme.Spacing.xxl)
                         } else {
                             ForEach(messages) { message in
-                                MessageBubble(message: message)
+                                MessageBubble(message: message, currentUserId: currentUserId)
                             }
                         }
                     }
@@ -259,7 +252,10 @@ struct ConversationView: View {
             .background(Theme.Colors.pageBackground)
             .navigationTitle(restaurantName)
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear { messages = MessageStore.shared.messages(for: conversationKey) }
+            .task {
+                currentUserId = supabase.auth.currentSession?.user.id.uuidString ?? ""
+                await loadMessages()
+            }
             .sheet(isPresented: $showOrderInfo) { OrderInfoSheet(order: conversation.order) }
             .confirmationDialog("Report or Block", isPresented: $showReportMenu, titleVisibility: .visible) {
                 // §1.2: report mechanism with reason selection
@@ -366,28 +362,95 @@ struct ConversationView: View {
     }
 
     func sendMessage() {
-        guard !messageText.isEmpty else { return }
-        let newMessage = Message(
+        guard !messageText.isEmpty, !currentUserId.isEmpty else { return }
+        let content = messageText
+        messageText = ""
+        let optimistic = Message(
             id: UUID().uuidString,
             orderId: conversation.orderId,
-            senderId: "currentUser",
-            receiverId: "restaurant",
-            content: messageText,
+            senderId: currentUserId,
+            receiverId: "",
+            content: content,
             timestamp: Date(),
             read: false,
             messageType: .text
         )
-        MessageStore.shared.append(newMessage, to: conversationKey)
-        withAnimation { messages.append(newMessage) }
+        withAnimation { messages.append(optimistic) }
         hapticFeedback(.light)
-        messageText = ""
+        Task {
+            struct MsgInsert: Encodable {
+                let conversationId: String
+                let topic: String
+                let senderId: String
+                let msgExtension: String
+                let content: String
+                let messageType: String
+                enum CodingKeys: String, CodingKey {
+                    case topic, content
+                    case conversationId = "conversation_id"
+                    case senderId = "sender_id"
+                    case msgExtension = "extension"
+                    case messageType = "message_type"
+                }
+            }
+            let payload = MsgInsert(
+                conversationId: conversation.id,
+                topic: conversation.id,
+                senderId: currentUserId,
+                msgExtension: "chat",
+                content: content,
+                messageType: "text"
+            )
+            try? await supabase.from("messages").insert(payload).execute()
+        }
+    }
+
+    private func loadMessages() async {
+        struct MsgRow: Decodable {
+            let id: String
+            let senderId: String
+            let content: String
+            let createdAt: String
+            let read: Bool
+            let messageType: String
+            enum CodingKeys: String, CodingKey {
+                case id, content, read
+                case senderId = "sender_id"
+                case createdAt = "created_at"
+                case messageType = "message_type"
+            }
+        }
+        do {
+            let rows: [MsgRow] = try await supabase
+                .from("messages")
+                .select("id, sender_id, content, created_at, read, message_type")
+                .eq("conversation_id", value: conversation.id)
+                .order("created_at", ascending: true)
+                .execute().value
+            let iso = ISO8601DateFormatter()
+            messages = rows.map { row in
+                Message(
+                    id: row.id,
+                    orderId: conversation.orderId,
+                    senderId: row.senderId,
+                    receiverId: "",
+                    content: row.content,
+                    timestamp: iso.date(from: row.createdAt) ?? Date(),
+                    read: row.read,
+                    messageType: Message.MessageType(rawValue: row.messageType) ?? .text
+                )
+            }
+        } catch {
+            // Load failed — show empty state
+        }
     }
 }
 
 // MARK: - Message Bubble
 struct MessageBubble: View {
     let message: Message
-    private var isFromCurrentUser: Bool { message.senderId == "currentUser" }
+    let currentUserId: String
+    private var isFromCurrentUser: Bool { message.senderId == currentUserId }
 
     var body: some View {
         HStack {

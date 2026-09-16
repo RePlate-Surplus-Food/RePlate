@@ -298,6 +298,7 @@ struct Conversation: Identifiable, Codable {
     var lastMessage: Message?
     var unreadCount: Int
     var updatedAt: Date
+    var restaurantName: String? = nil
 }
 
 // MARK: - Notification Model

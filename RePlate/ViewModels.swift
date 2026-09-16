@@ -426,21 +426,60 @@ class MessagesViewModel: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var isLoading = false
 
-    func loadConversations() async {
-        isLoading = true
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        if DemoData.isScreenshotMode {
-            conversations = DemoData.conversations
-        } else {
-            // TODO: backend — fetch real conversations from Supabase
-            conversations = []
+    private struct ConvRow: Decodable {
+        let id: String
+        let orderId: String?
+        let customerId: String
+        let restaurantId: String
+        let updatedAt: String
+        let restaurants: RestaurantJoin?
+
+        struct RestaurantJoin: Decodable { let name: String }
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case orderId = "order_id"
+            case customerId = "customer_id"
+            case restaurantId = "restaurant_id"
+            case updatedAt = "updated_at"
+            case restaurants
         }
-        isLoading = false
     }
 
-    func markAsRead(conversationId: String) async {
-        // Mark conversation as read
+    func loadConversations() async {
+        isLoading = true
+        defer { isLoading = false }
+        guard supabase.auth.currentSession != nil else {
+            if DemoData.isScreenshotMode { conversations = DemoData.conversations }
+            return
+        }
+        do {
+            let rows: [ConvRow] = try await supabase
+                .from("conversations")
+                .select("id, order_id, customer_id, restaurant_id, updated_at, restaurants(name)")
+                .order("updated_at", ascending: false)
+                .execute().value
+            let iso = ISO8601DateFormatter()
+            conversations = rows.map { row in
+                var conv = Conversation(
+                    id: row.id,
+                    orderId: row.orderId ?? "",
+                    order: nil,
+                    participantIds: [row.customerId, row.restaurantId],
+                    participants: nil,
+                    lastMessage: nil,
+                    unreadCount: 0,
+                    updatedAt: iso.date(from: row.updatedAt) ?? Date()
+                )
+                conv.restaurantName = row.restaurants?.name
+                return conv
+            }
+        } catch {
+            // Fetch failed — leave empty state
+        }
     }
+
+    func markAsRead(conversationId: String) async {}
 }
 
 // MockData is defined in MockData.swift
