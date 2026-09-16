@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Supabase
 
 // MARK: - Premium Food Listing Card (Customer View)
 struct PremiumFoodListingCard: View {
@@ -934,62 +935,100 @@ struct ClaimListingSheet: View {
         isProcessing = true
         hapticFeedback(.medium)
 
+        guard let uid = supabase.auth.currentSession?.user.id.uuidString,
+              let accessToken = supabase.auth.currentSession?.accessToken else {
+            isProcessing = false
+            return
+        }
+
+        // Generate a random 6-char uppercase pickup code
+        let pickupCode = String((0..<6).compactMap { _ in
+            "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".randomElement()
+        })
+
+        struct OrderInsert: Encodable {
+            let listing_id: String
+            let customer_id: String
+            let restaurant_id: String
+            let quantity: Int
+            let total_amount: Double
+            let status: String
+            let pickup_code: String
+            let pickup_code_used: Bool
+            let pickup_window_start: String
+            let pickup_window_end: String
+        }
+        struct InsertResult: Decodable { let id: String }
+
+        let iso = ISO8601DateFormatter()
+        let payload = OrderInsert(
+            listing_id: listing.id,
+            customer_id: uid,
+            restaurant_id: listing.restaurantId,
+            quantity: selectedQuantity,
+            total_amount: listing.isFree ? 0 : listing.discountedPrice * Double(selectedQuantity),
+            status: listing.isFree ? "confirmed" : "pending",
+            pickup_code: pickupCode,
+            pickup_code_used: false,
+            pickup_window_start: iso.string(from: listing.pickupStartTime),
+            pickup_window_end: iso.string(from: listing.pickupEndTime)
+        )
+
         if listing.isFree {
-            // Free listing — create order, no payment needed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                isProcessing = false
-                withAnimation { paymentComplete = true }
-                // TODO: backend — POST /orders with status = confirmed for free listings
+            Task {
+                _ = try? await supabase
+                    .from("orders")
+                    .insert(payload)
+                    .select("id")
+                    .execute()
+                    .value as [InsertResult]
+                await MainActor.run {
+                    isProcessing = false
+                    withAnimation { paymentComplete = true }
+                }
             }
             return
         }
 
-        // Paid listing — create order row then call Edge Function
-        // TODO: backend — first POST to Supabase to create order with status = pending,
-        // then call StripePaymentService with the returned orderId
-        // For now, simulate with a stub orderId:
-        let stubOrderId = UUID().uuidString
+        // Paid listing — create order row with status=pending, then call Stripe
         // SECURITY: payment amount is validated server-side in the Edge Function
+        Task {
+            var orderId = UUID().uuidString
+            if let results = try? await supabase
+                .from("orders")
+                .insert(payload)
+                .select("id")
+                .execute()
+                .value as [InsertResult],
+               let first = results.first {
+                orderId = first.id
+            }
 
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootVC = windowScene.windows.first?.rootViewController else {
-            isProcessing = false
-            return
-        }
-
-        paymentService.startPayment(
-            orderId: stubOrderId,
-            supabaseToken: "stub-token",  // TODO: replace with appState.supabaseToken or supabase.auth.session?.accessToken
-            from: rootVC
-        ) { result in
-            isProcessing = false
-            switch result {
-            case .completed(let paymentIntentId):
-                // TODO: backend — update order.payment_id = paymentIntentId, status = confirmed
-                // The webhook (stripe-webhook Edge Function) is the source of truth for confirmed status
-                print("[Payment] Completed, intentId: \(paymentIntentId)")
-                withAnimation { paymentComplete = true }
-
-                // Save display-only payment method (brand + last4) — no raw card data
-                // SECURITY: brand/last4 come from Stripe SDK result, not from user input
-                Task {
-                    await paymentService.savePaymentMethod(
-                        userId: appState.currentUser?.id ?? "",
-                        brand: "Visa",      // TODO: get from PaymentSheet result
-                        last4: "4242",      // TODO: get from PaymentSheet result
-                        expMonth: 12,       // TODO: get from PaymentSheet result
-                        expYear: 2028,      // TODO: get from PaymentSheet result
-                        supabaseToken: "stub-token"
-                    )
+            await MainActor.run {
+                guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                      let rootVC = windowScene.windows.first?.rootViewController else {
+                    isProcessing = false
+                    return
                 }
 
-            case .canceled:
-                // User dismissed PaymentSheet — no action needed
-                break
-
-            case .failed(let error):
-                errorMessage = error.localizedDescription
-                showError = true
+                paymentService.startPayment(
+                    orderId: orderId,
+                    supabaseToken: accessToken,
+                    from: rootVC
+                ) { result in
+                    isProcessing = false
+                    switch result {
+                    case .completed(let paymentIntentId):
+                        // Webhook (stripe-webhook Edge Function) is source of truth for status=confirmed
+                        print("[Payment] Completed, intentId: \(paymentIntentId)")
+                        withAnimation { paymentComplete = true }
+                    case .canceled:
+                        break
+                    case .failed(let error):
+                        errorMessage = error.localizedDescription
+                        showError = true
+                    }
+                }
             }
         }
     }

@@ -8,6 +8,7 @@
 import SwiftUI
 import PhotosUI
 import Combine
+import Supabase
 
 // MARK: - Restaurant Dashboard
 struct RestaurantDashboardView: View {
@@ -429,7 +430,13 @@ struct RestaurantDashboardView: View {
                             withAnimation {
                                 viewModel.activeListings.removeAll { $0.id == listing.id }
                             }
-                            // TODO: backend — DELETE /listings/{id}
+                            Task {
+                                try? await supabase
+                                    .from("food_listings")
+                                    .delete()
+                                    .eq("id", value: listing.id)
+                                    .execute()
+                            }
                         })
                     }
                 }
@@ -539,7 +546,14 @@ private struct FigmaOrderCard: View {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                         isConfirmed = true
                     }
-                    // TODO: backend — mark order as picked up on server
+                    Task {
+                        try? await supabase
+                            .from("orders")
+                            .update(["status": "completed",
+                                     "completed_at": ISO8601DateFormatter().string(from: Date())])
+                            .eq("id", value: order.id)
+                            .execute()
+                    }
                 } label: {
                     Text(isConfirmed ? "Picked Up!" : "Confirm Pickup")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -1600,46 +1614,118 @@ class RestaurantOrdersViewModel: ObservableObject {
     @Published var pendingOrders: [Order] = []
     @Published var completedOrders: [Order] = []
     @Published var isLoading = false
-    @Published var showPickupConfirmed = false  // brief success toast
+    @Published var showPickupConfirmed = false
     @Published var confirmedOrderId: String? = nil
-
-    weak var appState: AppState?
-
-    init(appState: AppState? = nil) {
-        self.appState = appState
-    }
 
     func loadOrders() async {
         isLoading = true
         defer { isLoading = false }
-        try? await Task.sleep(nanoseconds: 600_000_000)
-        let all = appState?.orders ?? []
-        pendingOrders   = all.filter { $0.status == .pending || $0.status == .confirmed || $0.status == .ready }
-        completedOrders = all.filter { $0.status == .completed || $0.status == .cancelled || $0.status == .noShow }
+
+        guard let uid = supabase.auth.currentSession?.user.id.uuidString else { return }
+
+        do {
+            let rows: [RestOrderRow] = try await supabase
+                .from("orders")
+                .select("id, listing_id, customer_id, restaurant_id, quantity, total_amount, status, pickup_code, pickup_window_start, pickup_window_end, notes, payment_id, created_at, completed_at")
+                .eq("restaurant_id", value: uid)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            let orders = rows.map { $0.toOrder() }
+            pendingOrders   = orders.filter { $0.status == .pending || $0.status == .confirmed || $0.status == .ready }
+            completedOrders = orders.filter { $0.status == .completed || $0.status == .cancelled || $0.status == .noShow }
+        } catch {
+            // Fetch failed — leave empty state
+        }
     }
 
-    /// Move an order from pending → completed (Confirm Pickup).
-    /// TODO: backend — POST /orders/{id}/status { status: "completed" }
-    // SECURITY: server must validate the code, mark it used, and prevent reuse
+    // SECURITY: server must also validate the pickup code and mark it used
     func confirmPickup(_ order: Order) {
         guard let idx = pendingOrders.firstIndex(where: { $0.id == order.id }) else { return }
-        // Update in appState (single source of truth)
-        if let appState = appState,
-           let appIdx = appState.orders.firstIndex(where: { $0.id == order.id }) {
-            appState.orders[appIdx].status = .completed
-        }
         withAnimation {
             var updated = pendingOrders.remove(at: idx)
             updated.status = .completed
             completedOrders.insert(updated, at: 0)
         }
-        // Show 2-second "Picked up!" toast
         confirmedOrderId = order.id
         showPickupConfirmed = true
         Task {
+            try? await supabase
+                .from("orders")
+                .update(["status": "completed",
+                         "completed_at": ISO8601DateFormatter().string(from: Date())])
+                .eq("id", value: order.id)
+                .execute()
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             showPickupConfirmed = false
             confirmedOrderId = nil
+        }
+    }
+}
+
+private struct RestOrderRow: Decodable {
+    let id: String
+    let listingId: String?
+    let customerId: String
+    let restaurantId: String
+    let quantity: Int
+    let totalAmount: Double
+    let status: String
+    let pickupCode: String
+    let pickupWindowStart: Date?
+    let pickupWindowEnd: Date?
+    let notes: String?
+    let paymentId: String?
+    let createdAt: Date
+    let completedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, quantity, notes, status
+        case listingId = "listing_id"
+        case customerId = "customer_id"
+        case restaurantId = "restaurant_id"
+        case totalAmount = "total_amount"
+        case pickupCode = "pickup_code"
+        case pickupWindowStart = "pickup_window_start"
+        case pickupWindowEnd = "pickup_window_end"
+        case paymentId = "payment_id"
+        case createdAt = "created_at"
+        case completedAt = "completed_at"
+    }
+
+    func toOrder() -> Order {
+        let now = Date()
+        let start = pickupWindowStart ?? now
+        let end = pickupWindowEnd ?? now.addingTimeInterval(3600)
+        return Order(
+            id: id,
+            listingId: listingId ?? "",
+            listing: nil,
+            customerId: customerId,
+            customer: nil,
+            restaurantId: restaurantId,
+            restaurant: nil,
+            quantity: quantity,
+            totalAmount: totalAmount,
+            status: dbStatusToOrderStatus(status),
+            pickupCode: pickupCode,
+            pickupTime: start,
+            pickupWindowStart: start,
+            pickupWindowEnd: end,
+            createdAt: createdAt,
+            completedAt: completedAt,
+            notes: notes,
+            paymentId: paymentId
+        )
+    }
+
+    private func dbStatusToOrderStatus(_ s: String) -> Order.OrderStatus {
+        switch s {
+        case "confirmed": return .confirmed
+        case "ready": return .ready
+        case "completed": return .completed
+        case "cancelled": return .cancelled
+        default: return .pending
         }
     }
 }
@@ -1796,7 +1882,6 @@ struct RestaurantOrdersView: View {
             .ignoresSafeArea(edges: .top)
             .background(Theme.Colors.pageBackground)
             .task {
-                viewModel.appState = appState
                 await viewModel.loadOrders()
             }
             .sheet(item: $selectedOrder)       { order in RestaurantOrderDetailView(order: order) }

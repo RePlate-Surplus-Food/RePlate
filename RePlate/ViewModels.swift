@@ -278,12 +278,6 @@ class OrdersViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var selectedTab = 0
 
-    weak var appState: AppState?
-
-    init(appState: AppState? = nil) {
-        self.appState = appState
-    }
-
     func loadOrders() async {
         isLoading = true
         defer { isLoading = false }
@@ -296,36 +290,55 @@ class OrdersViewModel: ObservableObject {
             return
         }
 
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        guard let uid = supabase.auth.currentSession?.user.id.uuidString else { return }
 
-        // TODO: fetch real orders from Supabase
-        let allOrders = appState?.orders ?? []
-        pendingOrders = allOrders.filter {
-            $0.status == .pending || $0.status == .confirmed || $0.status == .ready
-        }
-        completedOrders = allOrders.filter {
-            $0.status == .completed || $0.status == .cancelled
+        do {
+            let rows: [OrderRow] = try await supabase
+                .from("orders")
+                .select("id, listing_id, customer_id, restaurant_id, quantity, total_amount, status, pickup_code, pickup_window_start, pickup_window_end, notes, payment_id, created_at, completed_at")
+                .eq("customer_id", value: uid)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            let orders = rows.map { $0.toOrder() }
+            pendingOrders = orders.filter { $0.status == .pending || $0.status == .confirmed || $0.status == .ready }
+            completedOrders = orders.filter { $0.status == .completed || $0.status == .cancelled || $0.status == .noShow }
+        } catch {
+            // Fetch failed — leave empty state
         }
     }
 
-    /// Cancel an order, updating the shared appState source of truth.
-    /// TODO: backend — POST /orders/{id}/status { status: "cancelled" }
     func cancelOrder(_ order: Order) {
-        guard let appState = appState,
-              let idx = appState.orders.firstIndex(where: { $0.id == order.id }) else { return }
-        appState.orders[idx].status = .cancelled
         withAnimation {
             pendingOrders.removeAll { $0.id == order.id }
-            var cancelled = appState.orders[idx]
+            var cancelled = order
             cancelled.status = .cancelled
             completedOrders.insert(cancelled, at: 0)
         }
         hapticFeedback(.success)
-        // TODO: backend — POST /orders/{id}/status { status: "cancelled" }
+        Task {
+            try? await supabase
+                .from("orders")
+                .update(["status": "cancelled"])
+                .eq("id", value: order.id)
+                .execute()
+        }
     }
 
     func updateOrderStatus(orderId: String, status: Order.OrderStatus) async {
-        // Update order status
+        let dbStatus: String
+        switch status {
+        case .pending: dbStatus = "pending"
+        case .confirmed: dbStatus = "confirmed"
+        case .ready: dbStatus = "ready"
+        case .completed: dbStatus = "completed"
+        case .cancelled, .noShow: dbStatus = "cancelled"
+        }
+        try? await supabase
+            .from("orders")
+            .update(["status": dbStatus])
+            .eq("id", value: orderId)
+            .execute()
         hapticFeedback(.success)
         await loadOrders()
     }
@@ -350,21 +363,28 @@ class SearchViewModel: ObservableObject {
             searchResults = []
             return
         }
-        
+
         isLoading = true
         defer { isLoading = false }
-        
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        
-        // TODO: fetch real search results from Supabase
-        searchResults = []
-        
-        // Add to recent searches
+
+        do {
+            let rows: [ListingRow] = try await supabase
+                .from("food_listings")
+                .select()
+                .eq("status", value: "active")
+                .ilike("title", value: "%\(searchQuery)%")
+                .order("created_at", ascending: false)
+                .limit(30)
+                .execute()
+                .value
+            searchResults = rows.map { $0.toFoodListing() }
+        } catch {
+            searchResults = []
+        }
+
         if !recentSearches.contains(searchQuery) {
             recentSearches.insert(searchQuery, at: 0)
-            if recentSearches.count > 5 {
-                recentSearches.removeLast()
-            }
+            if recentSearches.count > 5 { recentSearches.removeLast() }
         }
     }
     
@@ -483,6 +503,75 @@ class MessagesViewModel: ObservableObject {
 }
 
 // MockData is defined in MockData.swift
+
+// MARK: - Supabase row decodable for orders
+
+private struct OrderRow: Decodable {
+    let id: String
+    let listingId: String?
+    let customerId: String
+    let restaurantId: String
+    let quantity: Int
+    let totalAmount: Double
+    let status: String
+    let pickupCode: String
+    let pickupWindowStart: Date?
+    let pickupWindowEnd: Date?
+    let notes: String?
+    let paymentId: String?
+    let createdAt: Date
+    let completedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, quantity, notes, status
+        case listingId = "listing_id"
+        case customerId = "customer_id"
+        case restaurantId = "restaurant_id"
+        case totalAmount = "total_amount"
+        case pickupCode = "pickup_code"
+        case pickupWindowStart = "pickup_window_start"
+        case pickupWindowEnd = "pickup_window_end"
+        case paymentId = "payment_id"
+        case createdAt = "created_at"
+        case completedAt = "completed_at"
+    }
+
+    func toOrder() -> Order {
+        let now = Date()
+        let start = pickupWindowStart ?? now
+        let end = pickupWindowEnd ?? now.addingTimeInterval(3600)
+        return Order(
+            id: id,
+            listingId: listingId ?? "",
+            listing: nil,
+            customerId: customerId,
+            customer: nil,
+            restaurantId: restaurantId,
+            restaurant: nil,
+            quantity: quantity,
+            totalAmount: totalAmount,
+            status: dbStatusToOrderStatus(status),
+            pickupCode: pickupCode,
+            pickupTime: start,
+            pickupWindowStart: start,
+            pickupWindowEnd: end,
+            createdAt: createdAt,
+            completedAt: completedAt,
+            notes: notes,
+            paymentId: paymentId
+        )
+    }
+
+    private func dbStatusToOrderStatus(_ s: String) -> Order.OrderStatus {
+        switch s {
+        case "confirmed": return .confirmed
+        case "ready": return .ready
+        case "completed": return .completed
+        case "cancelled": return .cancelled
+        default: return .pending
+        }
+    }
+}
 
 // MARK: - Supabase row decodable for food_listings
 

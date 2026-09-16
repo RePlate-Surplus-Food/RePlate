@@ -31,7 +31,6 @@ struct OrdersView: View {
         .ignoresSafeArea(edges: .top)
         .background(Theme.Colors.pageBackground)
         .task {
-            viewModel.appState = appState
             await viewModel.loadOrders()
         }
         .sheet(item: $selectedOrder) { order in
