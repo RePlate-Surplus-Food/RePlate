@@ -20,6 +20,11 @@ class HomeViewModel: ObservableObject {
     @Published var showMap = false
     
     func loadListings() async {
+        if DemoData.isScreenshotMode {
+            listings = DemoData.listings
+            featuredListings = Array(DemoData.listings.prefix(3))
+            return
+        }
         isLoading = true
         defer { isLoading = false }
 
@@ -109,6 +114,44 @@ class RestaurantDashboardViewModel: ObservableObject {
     }
 }
 
+// MARK: - Restaurant Profile View Model
+
+@MainActor
+class RestaurantProfileViewModel: ObservableObject {
+    @Published var cuisine: String = ""
+    @Published var address: String = ""
+    @Published var phone: String = ""
+    @Published var isLoading = false
+
+    private struct RestaurantFields: Decodable {
+        let cuisine: [String]
+        let address: String?
+        let phoneNumber: String?
+        enum CodingKeys: String, CodingKey {
+            case cuisine, address
+            case phoneNumber = "phone_number"
+        }
+    }
+
+    func load() async {
+        guard let uid = supabase.auth.currentSession?.user.id.uuidString else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let row: RestaurantFields = try await supabase
+                .from("restaurants")
+                .select("cuisine, address, phone_number")
+                .eq("owner_id", value: uid)
+                .single()
+                .execute()
+                .value
+            cuisine = row.cuisine.joined(separator: ", ")
+            address = row.address ?? ""
+            phone = row.phoneNumber ?? ""
+        } catch { }
+    }
+}
+
 // MARK: - Post Listing View Model
 @MainActor
 class PostListingViewModel: ObservableObject {
@@ -128,27 +171,80 @@ class PostListingViewModel: ObservableObject {
     
     var canPost: Bool {
         !title.isEmpty &&
-        !selectedImages.isEmpty &&
         !quantity.isEmpty &&
         (isFree || !discountedPrice.isEmpty)
     }
-    
+
     func postListing() async {
         guard canPost else { return }
-        
         isPosting = true
         defer { isPosting = false }
-        
-        // Simulate posting
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        
-        hapticFeedback(.success)
-        showSuccess = true
-        
-        // Reset form
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.resetForm()
+
+        guard let uid = supabase.auth.currentSession?.user.id.uuidString else { return }
+
+        struct RestaurantFields: Decodable {
+            let name: String
+            let address: String?
         }
+        var restaurantName = ""
+        var restaurantAddress = ""
+        if let row: RestaurantFields = try? await supabase
+            .from("restaurants")
+            .select("name, address")
+            .eq("owner_id", value: uid)
+            .single()
+            .execute()
+            .value {
+            restaurantName = row.name
+            restaurantAddress = row.address ?? ""
+        }
+
+        struct ListingInsert: Encodable {
+            let restaurant_id: String
+            let title: String
+            let description: String
+            let category: String
+            let original_price: Double?
+            let discounted_price: Double?
+            let is_free: Bool
+            let quantity: Int
+            let quantity_remaining: Int
+            let pickup_start: String
+            let pickup_end: String
+            let status: String
+            let dietary_info: [String]
+            let restaurant_name: String
+            let address: String
+        }
+
+        let iso = ISO8601DateFormatter()
+        let qty = Int(quantity) ?? 1
+        let payload = ListingInsert(
+            restaurant_id: uid,
+            title: title,
+            description: description,
+            category: category.rawValue,
+            original_price: isFree ? nil : Double(originalPrice),
+            discounted_price: isFree ? nil : Double(discountedPrice),
+            is_free: isFree,
+            quantity: qty,
+            quantity_remaining: qty,
+            pickup_start: iso.string(from: pickupStartTime),
+            pickup_end: iso.string(from: pickupEndTime),
+            status: "active",
+            dietary_info: selectedDietaryInfo.map { $0.rawValue },
+            restaurant_name: restaurantName,
+            address: restaurantAddress
+        )
+
+        do {
+            try await supabase.from("food_listings").insert(payload).execute()
+            hapticFeedback(.success)
+            showSuccess = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                self.resetForm()
+            }
+        } catch { }
     }
     
     func resetForm() {
@@ -191,6 +287,14 @@ class OrdersViewModel: ObservableObject {
     func loadOrders() async {
         isLoading = true
         defer { isLoading = false }
+
+        if DemoData.isScreenshotMode {
+            pendingOrders = DemoData.orders.filter {
+                $0.status == .pending || $0.status == .confirmed || $0.status == .ready
+            }
+            completedOrders = []
+            return
+        }
 
         try? await Task.sleep(nanoseconds: 1_000_000_000)
 
@@ -285,9 +389,14 @@ class ProfileViewModel: ObservableObject {
     func loadProfile() async {
         isLoading = true
         defer { isLoading = false }
-        
+
+        if DemoData.isScreenshotMode {
+            user = DemoData.user
+            return
+        }
+
         try? await Task.sleep(nanoseconds: 500_000_000)
-        
+
         // Load from auth service
         user = RePlateAuthService.shared.currentUser
     }
@@ -320,8 +429,12 @@ class MessagesViewModel: ObservableObject {
     func loadConversations() async {
         isLoading = true
         try? await Task.sleep(nanoseconds: 300_000_000)
-        // TODO: backend — fetch real conversations from Supabase
-        conversations = []
+        if DemoData.isScreenshotMode {
+            conversations = DemoData.conversations
+        } else {
+            // TODO: backend — fetch real conversations from Supabase
+            conversations = []
+        }
         isLoading = false
     }
 
@@ -350,6 +463,7 @@ private struct ListingRow: Decodable {
     let status: String
     let dietaryInfo: [String]
     let imageUrl: String?
+    let restaurantName: String?
     let address: String?
     let createdAt: Date
 
@@ -364,6 +478,7 @@ private struct ListingRow: Decodable {
         case pickupEnd = "pickup_end"
         case dietaryInfo = "dietary_info"
         case imageUrl = "image_url"
+        case restaurantName = "restaurant_name"
         case createdAt = "created_at"
     }
 
@@ -372,10 +487,28 @@ private struct ListingRow: Decodable {
             ?? FoodListing.FoodCategory.meals
         let dietary = dietaryInfo.compactMap { FoodListing.DietaryInfo(rawValue: $0) }
 
+        let restaurant = Restaurant(
+            id: restaurantId,
+            name: restaurantName ?? "Unknown Restaurant",
+            description: "",
+            address: address ?? "",
+            location: .init(latitude: 0, longitude: 0),
+            phoneNumber: "",
+            email: "",
+            imageURL: nil,
+            coverImageURL: nil,
+            cuisine: [],
+            rating: 0,
+            totalReviews: 0,
+            verified: false,
+            activeListingsCount: 0,
+            isPremium: false
+        )
+
         return FoodListing(
             id: id,
             restaurantId: restaurantId,
-            restaurant: nil,
+            restaurant: restaurant,
             title: title,
             description: description,
             category: cat,

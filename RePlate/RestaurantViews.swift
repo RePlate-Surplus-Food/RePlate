@@ -2067,6 +2067,7 @@ struct RestaurantOrdersView: View {
 // MARK: - Restaurant Profile View
 struct RestaurantProfileView: View {
     @EnvironmentObject var appState: AppState
+    @StateObject private var profileVM = RestaurantProfileViewModel()
     @State private var showRestaurantDetails  = false
     @State private var showLocationPickup     = false
     @State private var showConnectOnboarding  = false
@@ -2076,7 +2077,8 @@ struct RestaurantProfileView: View {
     @State private var showContactSupport     = false
     @State private var showSignOutConfirm     = false
 
-    private var restaurantName: String { appState.currentUser?.name ?? "Verde Bistro" }
+    private var restaurantName: String { appState.currentUser?.name ?? "Your Restaurant" }
+    private var isVerified: Bool { appState.currentUser?.verifiedRestaurant ?? false }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -2088,8 +2090,15 @@ struct RestaurantProfileView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(Theme.Colors.pageBackground)
-        .sheet(isPresented: $showRestaurantDetails)  { RestaurantDetailsEditView() }
-        .sheet(isPresented: $showLocationPickup)     { LocationPickupEditView() }
+        .task { await profileVM.load() }
+        .sheet(isPresented: $showRestaurantDetails)  {
+            RestaurantDetailsEditView()
+                .onDisappear { Task { await profileVM.load() } }
+        }
+        .sheet(isPresented: $showLocationPickup)     {
+            LocationPickupEditView()
+                .onDisappear { Task { await profileVM.load() } }
+        }
         .sheet(isPresented: $showConnectOnboarding)  { ConnectOnboardingView() }
         .sheet(isPresented: $showNotifications)      { NotificationsPreferencesView() }
         .sheet(isPresented: $showStaffAccounts)      { StaffAccountsView() }
@@ -2133,14 +2142,22 @@ struct RestaurantProfileView: View {
                 Text(restaurantName)
                     .font(.system(size: 22, weight: .heavy, design: .rounded))
                     .foregroundColor(.white)
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(Theme.Colors.accent)
+                if isVerified {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(Theme.Colors.accent)
+                }
             }
-            Text("Mediterranean")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundColor(.white.opacity(0.8))
-                .padding(.top, 4)
+            if !profileVM.cuisine.isEmpty {
+                Text(profileVM.cuisine)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.8))
+                    .padding(.top, 4)
+            }
+            Text(isVerified ? "Verified Restaurant" : "Pending Verification")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundColor(isVerified ? .white.opacity(0.7) : Color.yellow.opacity(0.9))
+                .padding(.top, profileVM.cuisine.isEmpty ? 4 : 2)
                 .padding(.bottom, 44)
         }
         .padding(.horizontal, 20)
@@ -2216,21 +2233,20 @@ struct RestaurantProfileView: View {
     // MARK: Info Card
     private var infoCard: some View {
         VStack(spacing: 0) {
-            profileInfoRow(icon: "mappin.circle.fill", value: "742 Evergreen Terrace, Springfield CA")
+            profileInfoRow(
+                icon: "mappin.circle.fill",
+                value: profileVM.address.isEmpty ? "No address set — tap Location & Pickup to add" : profileVM.address
+            )
             Divider().padding(.leading, 54)
-            profileInfoRow(icon: "clock.fill",         value: "Open: 9:00 AM – 10:00 PM")
+            profileInfoRow(
+                icon: "phone.fill",
+                value: profileVM.phone.isEmpty ? "No phone set — tap Restaurant Details to add" : profileVM.phone
+            )
             Divider().padding(.leading, 54)
-            profileInfoRow(icon: "phone.fill",         value: "+1 (555) 234-5678")
-            Divider().padding(.leading, 54)
-            Button {
-                if let url = URL(string: "https://instagram.com/yourbistro") {
-                    UIApplication.shared.open(url)
-                }
-            } label: {
-                profileInfoRow(icon: "camera.on.rectangle.fill", value: "@yourbistro on Instagram")
-                    .foregroundColor(Color(hex: "C13584"))
-            }
-            .buttonStyle(PlainButtonStyle())
+            profileInfoRow(
+                icon: "envelope.fill",
+                value: appState.currentUser?.email ?? ""
+            )
         }
         .padding(18)
         .background(Color(.systemBackground))
@@ -2261,11 +2277,11 @@ struct RestaurantProfileView: View {
     // MARK: Quick Stats
     private var quickStats: some View {
         HStack(spacing: 0) {
-            profileStatCell(value: "247", label: "Meals Saved")
+            profileStatCell(value: "\(appState.currentUser?.mealsSaved ?? 0)", label: "Meals Saved")
             Divider().frame(height: 40)
-            profileStatCell(value: "4.8", label: "Avg Rating")
+            profileStatCell(value: String(format: "%.1f", appState.currentUser?.co2Reduced ?? 0), label: "kg CO₂ Saved")
             Divider().frame(height: 40)
-            profileStatCell(value: "83",  label: "Reviews")
+            profileStatCell(value: String(format: "%.1f", appState.currentUser?.foodRescued ?? 0), label: "kg Rescued")
         }
         .padding(.vertical, 18)
         .background(Color(.systemBackground))
