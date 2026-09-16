@@ -14,6 +14,7 @@
 import SwiftUI
 import PhotosUI
 import CoreLocation
+import Supabase
 
 // MARK: - Reusable App Logo Mark
 struct RePlateIconView: View {
@@ -316,14 +317,7 @@ private struct OnboardingPageView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(.systemBackground).opacity(0.85))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(h.color.opacity(0.18), lineWidth: 1)
-                            )
-                    )
+                    .liquidGlass(cornerRadius: 16)
                 }
             }
             .padding(.horizontal, 16)
@@ -488,15 +482,8 @@ private struct AccountTypePickerCard: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(Color(.systemBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28)
-                            .stroke(accentColor.opacity(0.25), lineWidth: 2)
-                    )
-                    .shadow(color: Color.black.opacity(0.07), radius: 14, y: 5)
-            )
+            .liquidGlass(cornerRadius: 28)
+            .shadow(color: Color.black.opacity(0.07), radius: 14, y: 5)
         }
         .buttonStyle(SpringyButtonStyle())
     }
@@ -1175,6 +1162,8 @@ struct RestaurantSignUpView: View {
                         }
                     }
                 }
+                .contentShape(RoundedRectangle(cornerRadius: 24))
+                .frame(height: 120)
             }
 
             AuthLabeledField(
@@ -1620,7 +1609,41 @@ struct RestaurantSignUpView: View {
         if success {
             UserDefaults.standard.set(true, forKey: "acceptedTerms")
             UserDefaults.standard.set(Date(), forKey: "acceptedTermsAt")
-            // TODO: backend — send acceptance timestamp to server
+
+            // Save restaurant row to Supabase
+            if let userId = auth.currentUser?.id {
+                let fullAddress = [streetLine1, city, addressState, zipCode]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: ", ")
+
+                struct RestaurantInsert: Encodable {
+                    let owner_id: String
+                    let name: String
+                    let cuisine: [String]
+                    let address: String
+                    let phone_number: String
+                    let email: String
+                    let rating: Double
+                    let total_reviews: Int
+                    let verified: Bool
+                    let is_premium: Bool
+                }
+
+                let payload = RestaurantInsert(
+                    owner_id: userId,
+                    name: restaurantName,
+                    cuisine: [cuisineType],
+                    address: fullAddress,
+                    phone_number: formattedPhone,
+                    email: email,
+                    rating: 0.0,
+                    total_reviews: 0,
+                    verified: false,
+                    is_premium: false
+                )
+                try? await supabase.from("restaurants").insert(payload).execute()
+            }
+
             appState.isAuthenticated = true
             appState.currentUser = auth.currentUser
             appState.completeOnboarding()
