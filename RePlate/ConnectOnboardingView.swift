@@ -26,6 +26,7 @@
 
 import SwiftUI
 import SafariServices
+import Supabase
 
 // MARK: - ConnectOnboardingView
 
@@ -342,11 +343,17 @@ struct ConnectOnboardingView: View {
 
             let decoded = try JSONDecoder().decode(CreateAccountResponse.self, from: data)
 
-            // Persist the account ID on the current user so it's available across sessions.
-            // TODO: In production, store this in your database and load it on sign-in.
+            // Persist the account ID in-memory and to the profiles table
             await MainActor.run {
                 appState.currentUser?.stripeAccountId = decoded.accountId
                 isLoadingAction = false
+            }
+            if let uid = supabase.auth.currentSession?.user.id.uuidString {
+                try? await supabase
+                    .from("profiles")
+                    .update(["stripe_account_id": decoded.accountId])
+                    .eq("id", value: uid)
+                    .execute()
             }
 
             // Now that the account exists, fetch its initial status

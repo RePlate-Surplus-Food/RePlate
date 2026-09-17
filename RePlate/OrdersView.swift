@@ -555,7 +555,6 @@ struct OrderDetailView: View {
                     Button("Cancel Order", role: .destructive) {
                         hapticFeedback(.medium)
                         isCancelled = true
-                        // TODO: backend — POST /orders/{id}/status { status: "cancelled" }
                         viewModel?.cancelOrder(order)
                         dismiss()
                     }

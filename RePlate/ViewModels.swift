@@ -424,7 +424,6 @@ class ProfileViewModel: ObservableObject {
     func updateProfile(name: String, email: String, phoneNumber: String?) async {
         isLoading = true
         defer { isLoading = false }
-        // TODO: backend — sync with Supabase
         RePlateAuthService.shared.updateCurrentUser(name: name, email: email, phoneNumber: phoneNumber)
         hapticFeedback(.success)
         await loadProfile()

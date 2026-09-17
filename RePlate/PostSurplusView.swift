@@ -8,10 +8,12 @@
 //
 
 import SwiftUI
+import Supabase
 
 // MARK: - Post Surplus View
 struct PostSurplusView: View {
     @Environment(\.dismiss) var dismiss
+    @StateObject private var listingVM = PostListingViewModel()
 
     // MARK: Step state
     @State private var step         = 1   // 1 … 5
@@ -711,10 +713,21 @@ struct PostSurplusView: View {
                 Button {
                     hapticFeedback(.success)
                     isPosting = true
-                    // TODO: backend — send new listing to server, then append to appState.mockListings
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    let (pStart, pEnd) = resolvedPickupDates
+                    listingVM.title = title
+                    listingVM.description = title
+                    listingVM.category = FoodListing.FoodCategory(rawValue: foodType) ?? .meals
+                    listingVM.isFree = isFree
+                    listingVM.originalPrice = String(format: "%.2f", Double(originalCents) / 100.0)
+                    let discountedCents = manualOverride ? (Int(overrideDigits) ?? 0) : suggestedCents
+                    listingVM.discountedPrice = String(format: "%.2f", Double(discountedCents) / 100.0)
+                    listingVM.quantity = String(quantity)
+                    listingVM.pickupStartTime = pStart
+                    listingVM.pickupEndTime = pEnd
+                    Task {
+                        await listingVM.postListing()
                         isPosting = false
-                        withAnimation { showSuccess = true }
+                        if listingVM.showSuccess { withAnimation { showSuccess = true } }
                     }
                 } label: {
                     ZStack {
@@ -737,6 +750,25 @@ struct PostSurplusView: View {
                 }
                 .disabled(isPosting)
             }
+        }
+    }
+
+    // MARK: - Pickup date resolution
+    private var resolvedPickupDates: (start: Date, end: Date) {
+        let cal = Calendar.current
+        let now = Date()
+        switch pickupWindow {
+        case "Custom Time":
+            return (customDate, customDate.addingTimeInterval(7200))
+        case "6:00 PM – 9:00 PM":
+            let start = cal.date(bySettingHour: 18, minute: 0, second: 0, of: now) ?? now
+            return (start, start.addingTimeInterval(10800))
+        case "7:00 PM – 10:00 PM":
+            let start = cal.date(bySettingHour: 19, minute: 0, second: 0, of: now) ?? now
+            return (start, start.addingTimeInterval(10800))
+        default: // "Until Close"
+            let end = cal.date(bySettingHour: 23, minute: 59, second: 0, of: now) ?? now
+            return (now, end)
         }
     }
 
