@@ -1642,6 +1642,22 @@ struct RestaurantSignUpView: View {
                     is_premium: false
                 )
                 try? await supabase.from("restaurants").insert(payload).execute()
+
+                // Upload logo and store URL
+                if let logoData = try? await logoPhoto?.loadTransferable(type: Data.self),
+                   let ui = UIImage(data: logoData),
+                   let jpegData = ui.jpegData(compressionQuality: 0.8) {
+                    let logoPath = "\(userId)/logo.jpg"
+                    try? await supabase.storage.from("restaurant-images")
+                        .upload(logoPath, data: jpegData,
+                                options: FileOptions(contentType: "image/jpeg", upsert: true))
+                    if let logoUrl = try? supabase.storage.from("restaurant-images").getPublicURL(path: logoPath) {
+                        try? await supabase.from("restaurants")
+                            .update(["image_url": logoUrl.absoluteString])
+                            .eq("owner_id", value: userId)
+                            .execute()
+                    }
+                }
             }
 
             appState.isAuthenticated = true

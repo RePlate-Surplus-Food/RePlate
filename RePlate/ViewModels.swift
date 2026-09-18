@@ -199,6 +199,19 @@ class PostListingViewModel: ObservableObject {
             restaurantAddress = row.address ?? ""
         }
 
+        // Upload first listing photo if provided
+        var uploadedImageUrl: String? = nil
+        if let firstImage = selectedImages.first,
+           let jpegData = firstImage.jpegData(compressionQuality: 0.8) {
+            let imagePath = "\(uid)/\(UUID().uuidString).jpg"
+            try? await supabase.storage.from("listing-images")
+                .upload(imagePath, data: jpegData,
+                        options: FileOptions(contentType: "image/jpeg", upsert: false))
+            if let imageUrl = try? supabase.storage.from("listing-images").getPublicURL(path: imagePath) {
+                uploadedImageUrl = imageUrl.absoluteString
+            }
+        }
+
         struct ListingInsert: Encodable {
             let restaurant_id: String
             let title: String
@@ -215,6 +228,7 @@ class PostListingViewModel: ObservableObject {
             let dietary_info: [String]
             let restaurant_name: String
             let address: String
+            let image_url: String?
         }
 
         let iso = ISO8601DateFormatter()
@@ -234,7 +248,8 @@ class PostListingViewModel: ObservableObject {
             status: "active",
             dietary_info: selectedDietaryInfo.map { $0.rawValue },
             restaurant_name: restaurantName,
-            address: restaurantAddress
+            address: restaurantAddress,
+            image_url: uploadedImageUrl
         )
 
         do {

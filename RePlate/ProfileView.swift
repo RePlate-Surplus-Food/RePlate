@@ -8,6 +8,7 @@
 
 import SwiftUI
 import PhotosUI
+import Supabase
 
 struct ProfileView: View {
     @EnvironmentObject var appState: AppState
@@ -57,11 +58,22 @@ struct ProfileView: View {
         }
         .onChange(of: selectedPhoto) { _, newItem in
             Task {
-                if let data = try? await newItem?.loadTransferable(type: Data.self),
-                   let ui = UIImage(data: data) {
-                    profileImage = Image(uiImage: ui)
-                    appState.profileImageData = data  // persist locally
-                    // TODO: backend — upload profile image to server
+                guard let data = try? await newItem?.loadTransferable(type: Data.self),
+                      let ui = UIImage(data: data),
+                      let jpegData = ui.jpegData(compressionQuality: 0.8) else { return }
+                profileImage = Image(uiImage: ui)
+                appState.profileImageData = data
+                guard let uid = supabase.auth.currentSession?.user.id.uuidString else { return }
+                let path = "\(uid)/profile.jpg"
+                try? await supabase.storage.from("avatars")
+                    .upload(path, data: jpegData,
+                            options: FileOptions(contentType: "image/jpeg", upsert: true))
+                if let url = try? supabase.storage.from("avatars").getPublicURL(path: path) {
+                    try? await supabase.from("profiles")
+                        .update(["profile_image_url": url.absoluteString])
+                        .eq("id", value: uid)
+                        .execute()
+                    appState.currentUser?.profileImageURL = url.absoluteString
                 }
             }
         }
@@ -107,6 +119,20 @@ struct ProfileView: View {
                     if let profileImage {
                         profileImage.resizable().scaledToFill()
                             .clipShape(Circle()).frame(width: 96, height: 96)
+                    } else if let urlStr = viewModel.user?.profileImageURL ?? appState.currentUser?.profileImageURL,
+                              let url = URL(string: urlStr) {
+                        AsyncImage(url: url) { phase in
+                            if let img = phase.image {
+                                img.resizable().scaledToFill()
+                                    .clipShape(Circle()).frame(width: 96, height: 96)
+                            } else {
+                                Text(displayName.prefix(1).uppercased())
+                                    .font(.system(size: 42, weight: .black, design: .rounded))
+                                    .foregroundColor(.white)
+                                    .frame(width: 96, height: 96)
+                            }
+                        }
+                        .clipShape(Circle()).frame(width: 96, height: 96)
                     } else {
                         Text(displayName.prefix(1).uppercased())
                             .font(.system(size: 42, weight: .black, design: .rounded))
