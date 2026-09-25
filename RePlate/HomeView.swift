@@ -9,6 +9,7 @@
 import SwiftUI
 import MapKit
 import UserNotifications
+import Supabase
 
 struct HomeView: View {
     @EnvironmentObject var appState: AppState
@@ -16,6 +17,7 @@ struct HomeView: View {
     @State private var selectedListing: FoodListing?
     @State private var showNotifications = false
     @State private var showAIAssistant = false
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -26,7 +28,7 @@ struct HomeView: View {
             }
             .padding(.bottom, 100)
         }
-        .background(Theme.Colors.pageBackground)
+        .background(Color(.systemBackground))
         .ignoresSafeArea(edges: .top)
         .refreshable { await viewModel.refreshListings() }
         .task { await viewModel.loadListings() }
@@ -45,106 +47,172 @@ struct HomeView: View {
     // MARK: - Hero Header
     private var homeHeader: some View {
         ZStack(alignment: .top) {
-            // Subtle blob decoration
-            Circle()
-                .fill(Theme.Colors.accent.opacity(0.25))
-                .frame(width: 220, height: 220)
-                .blur(radius: 60)
-                .offset(x: 120, y: -40)
+            // Adaptive gradient — light: fresh bright green / dark: deep forest
+            LinearGradient(
+                colors: colorScheme == .dark
+                    ? [Color(hex: "030d06"), Color(hex: "0a3d1e"), Theme.Colors.primaryGradientStart]
+                    : [Color(hex: "0f7a46"), Color(hex: "17a05e"), Color(hex: "22bc74")],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .top)
+
+            // Animated floating gradient bubbles
+            HeaderBubbles()
+                .ignoresSafeArea(edges: .top)
 
             VStack(alignment: .leading, spacing: 0) {
-                // Top bar: location + bell
-                HStack(alignment: .center) {
+
+                // ── Top bar ──────────────────────────────────
+                HStack {
                     HStack(spacing: 8) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Theme.Colors.primaryGradientStart.opacity(0.12))
-                                .frame(width: 36, height: 36)
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(Theme.Colors.primaryGradientStart)
-                        }
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Theme.Colors.accent)
                         VStack(alignment: .leading, spacing: 1) {
                             Text("YOUR LOCATION")
-                                .font(.system(size: 9, weight: .bold, design: .rounded))
-                                .foregroundColor(Theme.Colors.secondaryLabel)
-                                .tracking(1)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.50))
+                                .tracking(1.5)
                             Text(appState.currentUser != nil ? "Downtown Manhattan" : "San Francisco, CA")
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundColor(Theme.Colors.label)
+                                .foregroundColor(.white)
                         }
                     }
                     Spacer()
-                    // Notification bell
                     Button {
                         hapticFeedback(.light)
                         showNotifications = true
                     } label: {
                         ZStack(alignment: .topTrailing) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color(.systemGray6))
-                                    .frame(width: 44, height: 44)
-                                Image(systemName: "bell.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(Theme.Colors.secondaryLabel)
-                            }
                             Circle()
-                                .fill(Theme.Colors.primaryGradientStart)
-                                .frame(width: 10, height: 10)
-                                .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                                .offset(x: 2, y: -2)
+                                .fill(.white.opacity(0.12))
+                                .frame(width: 42, height: 42)
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: 17))
+                                .foregroundColor(.white)
+                                .frame(width: 42, height: 42)
+                            Circle()
+                                .fill(Theme.Colors.accent)
+                                .frame(width: 9, height: 9)
+                                .overlay(Circle().stroke(Color.black.opacity(0.3), lineWidth: 1))
+                                .offset(x: 1, y: -1)
                         }
                     }
                 }
                 .padding(.top, 60)
+                .padding(.bottom, 28)
+
+                // ── Big stat ──────────────────────────────────
+                Text("Available near you")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.60))
+                    .padding(.bottom, 6)
+
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text(viewModel.isLoading ? "--" : "\(viewModel.listings.count)")
+                        .font(.system(size: 58, weight: .heavy, design: .rounded))
+                        .foregroundColor(.white)
+                    Text(" meals")
+                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Theme.Colors.accent, Color(hex: "a8f0c6")],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .padding(.leading, 4)
+                }
+                .padding(.bottom, 10)
+
+                // Badge
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("rescued today near you")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                }
+                .foregroundColor(Theme.Colors.accent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Theme.Colors.accent.opacity(0.15)))
                 .padding(.bottom, 24)
 
-                // Bold headline
-                Text("Feed your \(Text("belly").foregroundStyle(Theme.Colors.primaryGradient).italic())")
-                    .font(.system(size: 36, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.Colors.label)
-
-                Text("save the \(Text("world.").foregroundStyle(Theme.Colors.primaryGradient).italic())")
-                    .font(.system(size: 36, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.Colors.label)
-                    .padding(.bottom, 20)
-
-                // Search bar
-                NavigationLink(destination: SearchView()) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(Theme.Colors.primaryGradientStart)
-                        Text("Search for surplus near you...")
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .foregroundColor(Theme.Colors.secondaryLabel)
-                        Spacer()
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(Color(.systemGray6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18)
-                                    .stroke(Color(.systemGray5), lineWidth: 1.5)
-                            )
-                    )
+                // ── Glass impact card ─────────────────────────
+                HStack(spacing: 0) {
+                    headerStatCell(value: "1.2k", label: "kg saved")
+                    Rectangle().fill(.white.opacity(0.15)).frame(width: 1, height: 32)
+                    headerStatCell(value: "340", label: "CO₂ reduced")
+                    Rectangle().fill(.white.opacity(0.15)).frame(width: 1, height: 32)
+                    headerStatCell(value: "$8.2k", label: "value rescued")
                 }
-                .padding(.bottom, 8)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(.white.opacity(0.10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(.white.opacity(0.18), lineWidth: 1)
+                        )
+                )
+                .padding(.bottom, 18)
+
+                // ── Action pills ──────────────────────────────
+                HStack(spacing: 10) {
+                    NavigationLink(destination: SearchView()) {
+                        headerActionPill(icon: "magnifyingglass", title: "Search")
+                    }
+                    Button {
+                        hapticFeedback(.light)
+                        viewModel.toggleMapView()
+                    } label: {
+                        headerActionPill(icon: "map.fill", title: "Map View")
+                    }
+                    Button {
+                        hapticFeedback(.light)
+                        showAIAssistant = true
+                    } label: {
+                        headerActionPill(icon: "sparkles", title: "AI Pick")
+                    }
+                }
+                .padding(.bottom, 28)
             }
             .padding(.horizontal, 20)
         }
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 32, bottomTrailingRadius: 32, topTrailingRadius: 0))
+    }
+
+    private func headerStatCell(value: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.55))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func headerActionPill(icon: String, title: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+            Text(title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity)
         .background(
-            LinearGradient(
-                colors: [
-                    Theme.Colors.primaryGradientStart.opacity(0.10),
-                    Theme.Colors.primaryGradientEnd.opacity(0.05),
-                    Color(.systemBackground)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.white.opacity(0.14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(.white.opacity(0.22), lineWidth: 1)
+                )
         )
     }
 
@@ -246,6 +314,57 @@ struct HomeView: View {
         ("carrot",                            "Produce",       Theme.Colors.primaryGradientStart.opacity(0.10)),
         ("cup.and.saucer",                    "Beverages",     Theme.Colors.primaryGradientStart.opacity(0.10)),
     ]
+}
+
+// MARK: - Floating Header Bubbles
+private struct HeaderBubbles: View {
+    @State private var phase = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(colors: [Theme.Colors.accent.opacity(0.55), .clear],
+                                   center: .center, startRadius: 0, endRadius: 80)
+                )
+                .frame(width: 160)
+                .blur(radius: 30)
+                .offset(x: phase ? 130 : 100, y: phase ? 40 : 70)
+                .animation(.easeInOut(duration: 7).repeatForever(autoreverses: true), value: phase)
+
+            Circle()
+                .fill(
+                    RadialGradient(colors: [Color(hex: "a8f0c6").opacity(0.45), .clear],
+                                   center: .center, startRadius: 0, endRadius: 60)
+                )
+                .frame(width: 120)
+                .blur(radius: 25)
+                .offset(x: phase ? -110 : -80, y: phase ? 160 : 120)
+                .animation(.easeInOut(duration: 9).repeatForever(autoreverses: true), value: phase)
+
+            Circle()
+                .fill(
+                    RadialGradient(colors: [Color.white.opacity(0.18), .clear],
+                                   center: .center, startRadius: 0, endRadius: 50)
+                )
+                .frame(width: 90)
+                .blur(radius: 18)
+                .offset(x: phase ? 60 : 30, y: phase ? 240 : 200)
+                .animation(.easeInOut(duration: 6).repeatForever(autoreverses: true).delay(1), value: phase)
+
+            Circle()
+                .fill(
+                    RadialGradient(colors: [Theme.Colors.primaryGradientEnd.opacity(0.5), .clear],
+                                   center: .center, startRadius: 0, endRadius: 70)
+                )
+                .frame(width: 130)
+                .blur(radius: 28)
+                .offset(x: phase ? -50 : -20, y: phase ? 60 : 30)
+                .animation(.easeInOut(duration: 8).repeatForever(autoreverses: true).delay(2), value: phase)
+        }
+        .onAppear { phase = true }
+        .allowsHitTesting(false)
+    }
 }
 
 // MARK: - Category Pill
@@ -375,10 +494,16 @@ struct FigmaListingCard: View {
         // §1.2: Long-press context menu for reporting inappropriate listings
         .contextMenu {
             Button(role: .destructive) {
-                // TODO: backend — POST report to Supabase moderation queue
-                // For now sends an email so our support team is notified
-                if let url = URL(string: "mailto:support@replate.app?subject=Report%20Listing&body=Listing%20ID%3A%20\(listing.id)") {
-                    UIApplication.shared.open(url)
+                Task {
+                    guard let uid = supabase.auth.currentSession?.user.id.uuidString else { return }
+                    try? await supabase.from("reports")
+                        .insert([
+                            "reporter_id": uid,
+                            "listing_id": listing.id,
+                            "reason": "inappropriate",
+                            "created_at": ISO8601DateFormatter().string(from: Date())
+                        ])
+                        .execute()
                 }
             } label: {
                 Label("Report Listing", systemImage: "exclamationmark.triangle")

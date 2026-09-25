@@ -61,12 +61,7 @@ class StripePaymentService: ObservableObject {
 
                 await MainActor.run {
                     self.isLoading = false
-                    // TODO: present PaymentSheet — uncomment after adding Stripe SDK:
-                    // self.presentPaymentSheet(clientSecret: clientSecret, from: viewController, completion: completion)
-
-                    // Stub: simulate success for UI testing until SDK is added
-                    print("[Stripe stub] Would present PaymentSheet for \(amountCents) cents, secret: \(clientSecret.prefix(20))...")
-                    completion(.completed(paymentIntentId: "pi_stub_\(orderId.prefix(8))"))
+                    self.presentPaymentSheet(clientSecret: clientSecret, from: viewController, completion: completion)
                 }
             } catch {
                 await MainActor.run {
@@ -126,8 +121,7 @@ class StripePaymentService: ObservableObject {
         return (clientSecret, amountCents)
     }
 
-    // MARK: - Present PaymentSheet (uncomment after adding Stripe SDK)
-    /*
+    // MARK: - Present PaymentSheet
     private func presentPaymentSheet(
         clientSecret: String,
         from viewController: UIViewController,
@@ -143,7 +137,6 @@ class StripePaymentService: ObservableObject {
         paymentSheet.present(from: viewController) { result in
             switch result {
             case .completed:
-                // Extract PaymentIntent id from client secret (format: pi_xxx_secret_yyy)
                 let piId = clientSecret.components(separatedBy: "_secret_").first ?? clientSecret
                 completion(.completed(paymentIntentId: piId))
             case .canceled:
@@ -153,7 +146,6 @@ class StripePaymentService: ObservableObject {
             }
         }
     }
-    */
 
     // MARK: - Card Tokenization
     // Converts card fields into a Stripe PaymentMethod ID (pm_xxx).

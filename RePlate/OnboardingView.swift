@@ -966,7 +966,12 @@ struct SignUpView: View {
         if success {
             UserDefaults.standard.set(true, forKey: "acceptedTerms")
             UserDefaults.standard.set(Date(), forKey: "acceptedTermsAt")
-            // TODO: backend — send acceptance timestamp to server
+            if let uid = auth.currentUser?.id {
+                try? await supabase.from("profiles")
+                    .update(["terms_accepted_at": ISO8601DateFormatter().string(from: Date())])
+                    .eq("id", value: uid)
+                    .execute()
+            }
             appState.isAuthenticated = true
             appState.currentUser = auth.currentUser
             appState.completeOnboarding()

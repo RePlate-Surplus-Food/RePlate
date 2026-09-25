@@ -274,7 +274,7 @@ struct ConversationView: View {
             .alert("Report Sent", isPresented: $showReportConfirm) {
                 Button("OK") {}
             } message: {
-                Text("Thanks for reporting. Our Trust & Safety team will review this conversation within 24 hours. Contact support@replate.app for urgent issues.")
+                Text("Thanks for reporting. Our Trust & Safety team will review this conversation within 24 hours. Contact replateog@gmail.com for urgent issues.")
             }
             .alert("Block \(restaurantName)?", isPresented: $showBlockConfirm) {
                 Button("Block", role: .destructive) {

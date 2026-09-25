@@ -361,14 +361,14 @@ struct ProfileView: View {
             VStack(spacing: 0) {
                 // §1.5: Easy contact method required
                 MenuButton(icon: "envelope", title: "Contact Support") {
-                    if let url = URL(string: "mailto:support@replate.app?subject=RePlate%20Support") {
+                    if let url = URL(string: "mailto:replateog@gmail.com?subject=RePlate%20Support") {
                         UIApplication.shared.open(url)
                     }
                 }
                 Divider().padding(.leading, 60)
                 // §1.2: Report mechanism for user-generated content
                 MenuButton(icon: "exclamationmark.bubble", title: "Report a Problem") {
-                    if let url = URL(string: "mailto:support@replate.app?subject=RePlate%20Problem%20Report") {
+                    if let url = URL(string: "mailto:replateog@gmail.com?subject=RePlate%20Problem%20Report") {
                         UIApplication.shared.open(url)
                     }
                 }
