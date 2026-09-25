@@ -1043,30 +1043,36 @@ struct RestaurantSignUpView: View {
             VStack(spacing: 0) {
                 progressHeader
 
-                ScrollView(showsIndicators: false) {
-                    Group {
-                        switch step {
-                        case 1:  step1BusinessInfo
-                        case 2:  step2LocationContact
-                        default: step3Account
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: false) {
+                        Color.clear.frame(height: 0).id("top")
+                        Group {
+                            switch step {
+                            case 1:  step1BusinessInfo
+                            case 2:  step2LocationContact
+                            default: step3Account
+                            }
                         }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 28)
-                    .padding(.bottom, 20)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 28)
+                        .padding(.bottom, 20)
 
-                    // Already have an account
-                    Button {
-                        hapticFeedback(.light)
-                        showSignIn = true
-                    } label: {
-                        Text("Already have an account?  \(Text("Sign In").foregroundColor(Theme.Colors.primaryGradientStart).bold())")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundColor(Theme.Colors.secondaryLabel)
+                        // Already have an account
+                        Button {
+                            hapticFeedback(.light)
+                            showSignIn = true
+                        } label: {
+                            Text("Already have an account?  \(Text("Sign In").foregroundColor(Theme.Colors.primaryGradientStart).bold())")
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(Theme.Colors.secondaryLabel)
+                        }
+                        .padding(.bottom, 40)
                     }
-                    .padding(.bottom, 40)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: step)
+                    .onChange(of: step) { _, _ in
+                        withAnimation { proxy.scrollTo("top", anchor: .top) }
+                    }
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: step)
             }
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)

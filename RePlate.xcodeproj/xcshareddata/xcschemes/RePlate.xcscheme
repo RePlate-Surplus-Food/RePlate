@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D90F53552FC6AF8A00C41324"
-               BuildableName = "RePlate.app"
+               BuildableName = "RePlate: Surplus Food.app"
                BlueprintName = "RePlate"
                ReferencedContainer = "container:RePlate.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D90F53552FC6AF8A00C41324"
-            BuildableName = "RePlate.app"
+            BuildableName = "RePlate: Surplus Food.app"
             BlueprintName = "RePlate"
             ReferencedContainer = "container:RePlate.xcodeproj">
          </BuildableReference>
@@ -62,7 +62,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D90F53552FC6AF8A00C41324"
-            BuildableName = "RePlate.app"
+            BuildableName = "RePlate: Surplus Food.app"
             BlueprintName = "RePlate"
             ReferencedContainer = "container:RePlate.xcodeproj">
          </BuildableReference>

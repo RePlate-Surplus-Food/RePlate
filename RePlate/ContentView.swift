@@ -19,7 +19,9 @@ struct ContentView: View {
                     .transition(.opacity)
             } else {
                 Group {
-                    if !appState.hasCompletedOnboarding {
+                    if DemoData.isScreenshotMode {
+                        MainTabView()
+                    } else if !appState.hasCompletedOnboarding {
                         OnboardingView()
                             .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
                     } else if !appState.isAuthenticated {
@@ -56,7 +58,6 @@ struct SplashScreenView: View {
     var body: some View {
         ZStack {
             SplashBlobBackground()
-
             VStack(spacing: 22) {
                 ZStack {
                     // Animated wisps directly behind the logo
@@ -176,6 +177,74 @@ private struct LogoWisps: View {
     }
 }
 
+// MARK: - Liquid Glass helper
+extension View {
+    @ViewBuilder
+    func liquidGlass(cornerRadius: CGFloat = 16) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
+        } else {
+            self.background(
+                RoundedRectangle(cornerRadius: cornerRadius).fill(.ultraThinMaterial)
+            )
+        }
+    }
+}
+
+// MARK: - Bubble Squiggle Lines
+struct SquiggleDecor: View {
+    var color: Color = .white
+    var lineCount: Int = 5
+    var speed: Double = 0.35
+    var baseAlpha: Double = 0.18
+    var lineWidth: CGFloat = 1.8
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { tl in
+            Canvas { ctx, size in
+                let t = tl.date.timeIntervalSinceReferenceDate
+
+                for i in 0..<lineCount {
+                    let fi: CGFloat = CGFloat(i)
+                    let yBase   = size.height * (0.12 + fi * 0.19)
+                    let bubbleW: CGFloat = 52 + fi * 12   // arc width
+                    let bubbleH: CGFloat = 24 + fi * 6    // bump height
+                    let alpha   = max(0.05, baseAlpha - Double(i) * 0.08)
+
+                    // Drift left over time — each row at a slightly different speed
+                    let driftSpeed = speed * (60 + Double(i) * 10)
+                    let drift = CGFloat(t * driftSpeed).truncatingRemainder(dividingBy: bubbleW * 2)
+                    let startX: CGFloat = -bubbleW * 2 - drift
+
+                    var path = Path()
+                    path.move(to: CGPoint(x: startX, y: yBase))
+                    var x = startX
+                    var step = 0
+
+                    while x <= size.width + bubbleW * 2 {
+                        let goUp = step % 2 == 0
+                        let ctrlY = yBase + (goUp ? -bubbleH : bubbleH)
+                        path.addQuadCurve(
+                            to: CGPoint(x: x + bubbleW, y: yBase),
+                            control: CGPoint(x: x + bubbleW * 0.5, y: ctrlY)
+                        )
+                        x += bubbleW
+                        step += 1
+                    }
+
+                    ctx.stroke(
+                        path,
+                        with: .color(color.opacity(alpha)),
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+                    )
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+    }
+}
+
 // MARK: - Animated Blob Background
 private struct SplashBlobBackground: View {
     var body: some View {
@@ -283,11 +352,8 @@ struct CustomTabBar: View {
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.top, Theme.Spacing.sm)
         .padding(.bottom, Theme.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.CornerRadius.xl)
-                .fill(.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(0.08), radius: 18, y: -2)
-        )
+        .liquidGlass(cornerRadius: Theme.CornerRadius.xl)
+        .shadow(color: Color.black.opacity(0.10), radius: 20, y: -3)
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.bottom, Theme.Spacing.sm)
     }
