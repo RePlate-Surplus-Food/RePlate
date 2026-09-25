@@ -183,24 +183,23 @@ class PostListingViewModel: ObservableObject {
         guard let uid = supabase.auth.currentSession?.user.id.uuidString else { return }
 
         struct RestaurantFields: Decodable {
-            let name: String
-            let address: String?
+            let id: String
         }
-        var restaurantName = ""
-        var restaurantAddress = ""
+        var restaurantId = ""
         if let row: RestaurantFields = try? await supabase
             .from("restaurants")
-            .select("name, address")
+            .select("id")
             .eq("owner_id", value: uid)
             .single()
             .execute()
             .value {
-            restaurantName = row.name
-            restaurantAddress = row.address ?? ""
+            restaurantId = row.id
         }
 
+        guard !restaurantId.isEmpty else { return }
+
         // Upload first listing photo if provided
-        var uploadedImageUrl: String? = nil
+        var uploadedImageUrls: [String] = []
         if let firstImage = selectedImages.first,
            let jpegData = firstImage.jpegData(compressionQuality: 0.8) {
             let imagePath = "\(uid)/\(UUID().uuidString).jpg"
@@ -208,7 +207,7 @@ class PostListingViewModel: ObservableObject {
                 .upload(imagePath, data: jpegData,
                         options: FileOptions(contentType: "image/jpeg", upsert: false))
             if let imageUrl = try? supabase.storage.from("listing-images").getPublicURL(path: imagePath) {
-                uploadedImageUrl = imageUrl.absoluteString
+                uploadedImageUrls = [imageUrl.absoluteString]
             }
         }
 
@@ -221,20 +220,18 @@ class PostListingViewModel: ObservableObject {
             let discounted_price: Double?
             let is_free: Bool
             let quantity: Int
-            let quantity_remaining: Int
-            let pickup_start: String
-            let pickup_end: String
+            let available_quantity: Int
+            let pickup_start_time: String
+            let pickup_end_time: String
             let status: String
             let dietary_info: [String]
-            let restaurant_name: String
-            let address: String
-            let image_url: String?
+            let image_urls: [String]
         }
 
         let iso = ISO8601DateFormatter()
         let qty = Int(quantity) ?? 1
         let payload = ListingInsert(
-            restaurant_id: uid,
+            restaurant_id: restaurantId,
             title: title,
             description: description,
             category: category.rawValue,
@@ -242,18 +239,16 @@ class PostListingViewModel: ObservableObject {
             discounted_price: isFree ? nil : Double(discountedPrice),
             is_free: isFree,
             quantity: qty,
-            quantity_remaining: qty,
-            pickup_start: iso.string(from: pickupStartTime),
-            pickup_end: iso.string(from: pickupEndTime),
+            available_quantity: qty,
+            pickup_start_time: iso.string(from: pickupStartTime),
+            pickup_end_time: iso.string(from: pickupEndTime),
             status: "active",
             dietary_info: selectedDietaryInfo.map { $0.rawValue },
-            restaurant_name: restaurantName,
-            address: restaurantAddress,
-            image_url: uploadedImageUrl
+            image_urls: uploadedImageUrls
         )
 
         do {
-            try await supabase.from("food_listings").insert(payload).execute()
+            try await supabase.from("listings").insert(payload).execute()
             hapticFeedback(.success)
             showSuccess = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
