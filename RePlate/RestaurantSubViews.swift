@@ -10,6 +10,7 @@
 
 import SwiftUI
 import Supabase
+import PhotosUI
 
 // MARK: - Shared: Section label
 private func sectionLabel(_ title: String) -> some View {
@@ -812,6 +813,8 @@ struct RestaurantDetailsEditView: View {
     @State private var schedule: [DaySchedule] = DaySchedule.defaultSchedule()
     @State private var isSaving = false
     @State private var saveError: String? = nil
+    @State private var logoItem: PhotosPickerItem? = nil
+    @State private var logoImage: UIImage? = nil
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -826,23 +829,39 @@ struct RestaurantDetailsEditView: View {
                     // Logo upload area
                     HStack {
                         Spacer()
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 24)
-                                .fill(Theme.Colors.primaryGradientStart.opacity(0.07))
-                                .frame(width: 100, height: 100)
-                            RoundedRectangle(cornerRadius: 24)
-                                .stroke(
-                                    Theme.Colors.primaryGradientStart.opacity(0.35),
-                                    style: StrokeStyle(lineWidth: 2, dash: [8, 5])
-                                )
-                                .frame(width: 100, height: 100)
-                            VStack(spacing: 6) {
-                                Image(systemName: "camera.fill")
-                                    .font(.system(size: 22, weight: .medium))
-                                    .foregroundColor(Theme.Colors.primaryGradientStart.opacity(0.65))
-                                Text("Logo")
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                    .foregroundColor(Theme.Colors.secondaryLabel)
+                        PhotosPicker(selection: $logoItem, matching: .images) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(Theme.Colors.primaryGradientStart.opacity(0.07))
+                                    .frame(width: 100, height: 100)
+                                RoundedRectangle(cornerRadius: 24)
+                                    .stroke(
+                                        Theme.Colors.primaryGradientStart.opacity(0.35),
+                                        style: StrokeStyle(lineWidth: 2, dash: [8, 5])
+                                    )
+                                    .frame(width: 100, height: 100)
+                                if let img = logoImage {
+                                    Image(uiImage: img)
+                                        .resizable().scaledToFill()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                                } else {
+                                    VStack(spacing: 6) {
+                                        Image(systemName: "camera.fill")
+                                            .font(.system(size: 22, weight: .medium))
+                                            .foregroundColor(Theme.Colors.primaryGradientStart.opacity(0.65))
+                                        Text("Logo")
+                                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                            .foregroundColor(Theme.Colors.secondaryLabel)
+                                    }
+                                }
+                            }
+                        }
+                        .onChange(of: logoItem) { _, item in
+                            Task {
+                                guard let data = try? await item?.loadTransferable(type: Data.self),
+                                      let ui = UIImage(data: data) else { return }
+                                logoImage = ui
                             }
                         }
                         Spacer()
@@ -945,15 +964,21 @@ struct RestaurantDetailsEditView: View {
     private func loadRestaurant() async {
         guard let userId = appState.currentUser?.id else { return }
         struct Row: Decodable {
-            let id: String; let name: String; let phoneNumber: String?; let cuisine: [String]
+            let id: String; let name: String; let phoneNumber: String?
+            let cuisine: [String]; let instagramHandle: String?; let websiteUrl: String?
+            let operatingHours: [[String: String]]?
             enum CodingKeys: String, CodingKey {
-                case id, name, cuisine; case phoneNumber = "phone_number"
+                case id, name, cuisine
+                case phoneNumber = "phone_number"
+                case instagramHandle = "instagram_handle"
+                case websiteUrl = "website_url"
+                case operatingHours = "operating_hours"
             }
         }
         do {
             let row: Row = try await supabase
                 .from("restaurants")
-                .select("id, name, phone_number, cuisine")
+                .select("id, name, phone_number, cuisine, instagram_handle, website_url, operating_hours")
                 .eq("owner_id", value: userId)
                 .single()
                 .execute()
@@ -962,6 +987,16 @@ struct RestaurantDetailsEditView: View {
             restaurantName = row.name
             cuisine = row.cuisine.joined(separator: ", ")
             phone = row.phoneNumber ?? ""
+            instagramHandle = row.instagramHandle ?? ""
+            websiteURL = row.websiteUrl ?? ""
+            if let hours = row.operatingHours {
+                let fmt = DateFormatter(); fmt.dateFormat = "HH:mm"
+                for (i, h) in hours.enumerated() where i < schedule.count {
+                    schedule[i].isOpen = h["isOpen"] == "true"
+                    if let open = h["openTime"].flatMap({ fmt.date(from: $0) }) { schedule[i].openTime = open }
+                    if let close = h["closeTime"].flatMap({ fmt.date(from: $0) }) { schedule[i].closeTime = close }
+                }
+            }
         } catch {
             // No restaurant row yet — fields stay empty, created on first save
         }
@@ -972,19 +1007,36 @@ struct RestaurantDetailsEditView: View {
         saveError = nil
         let cuisineList = cuisine.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let fmt = DateFormatter(); fmt.dateFormat = "HH:mm"
+        let hoursJson: [[String: String]] = schedule.map { d in
+            ["day": d.day, "isOpen": d.isOpen ? "true" : "false",
+             "openTime": fmt.string(from: d.openTime), "closeTime": fmt.string(from: d.closeTime)]
+        }
 
         struct UpdatePayload: Encodable {
             let name: String; let phoneNumber: String; let cuisine: [String]
+            let instagramHandle: String; let websiteUrl: String
+            let operatingHours: [[String: String]]
             enum CodingKeys: String, CodingKey {
-                case name, cuisine; case phoneNumber = "phone_number"
+                case name, cuisine
+                case phoneNumber = "phone_number"
+                case instagramHandle = "instagram_handle"
+                case websiteUrl = "website_url"
+                case operatingHours = "operating_hours"
             }
         }
         struct InsertPayload: Encodable {
             let ownerId: String; let name: String; let phoneNumber: String
             let cuisine: [String]; let email: String
+            let instagramHandle: String; let websiteUrl: String
+            let operatingHours: [[String: String]]
+            let rating: Double; let totalReviews: Int; let verified: Bool; let isPremium: Bool
             enum CodingKeys: String, CodingKey {
-                case name, cuisine, email
+                case name, cuisine, email, rating, verified
                 case ownerId = "owner_id"; case phoneNumber = "phone_number"
+                case instagramHandle = "instagram_handle"; case websiteUrl = "website_url"
+                case operatingHours = "operating_hours"; case totalReviews = "total_reviews"
+                case isPremium = "is_premium"
             }
         }
         struct IDRow: Decodable { let id: String }
@@ -992,17 +1044,39 @@ struct RestaurantDetailsEditView: View {
         do {
             if let id = restaurantId {
                 try await supabase.from("restaurants")
-                    .update(UpdatePayload(name: restaurantName, phoneNumber: phone, cuisine: cuisineList))
+                    .update(UpdatePayload(
+                        name: restaurantName, phoneNumber: phone, cuisine: cuisineList,
+                        instagramHandle: instagramHandle, websiteUrl: websiteURL,
+                        operatingHours: hoursJson
+                    ))
                     .eq("id", value: id)
                     .execute()
             } else {
                 let idRow: IDRow = try await supabase.from("restaurants")
                     .insert(InsertPayload(
-                        ownerId: userId, name: restaurantName, phoneNumber: phone,
-                        cuisine: cuisineList, email: appState.currentUser?.email ?? ""
+                        ownerId: userId, name: restaurantName.isEmpty ? "My Restaurant" : restaurantName,
+                        phoneNumber: phone, cuisine: cuisineList.isEmpty ? ["Other"] : cuisineList,
+                        email: appState.currentUser?.email ?? "",
+                        instagramHandle: instagramHandle, websiteUrl: websiteURL,
+                        operatingHours: hoursJson,
+                        rating: 0.0, totalReviews: 0, verified: false, isPremium: false
                     ))
                     .select("id").single().execute().value
                 restaurantId = idRow.id
+            }
+            // Upload logo if a new one was selected
+            if let img = logoImage, let jpegData = img.jpegData(compressionQuality: 0.8),
+               let finalId = restaurantId {
+                let logoPath = "\(userId)/logo.jpg"
+                try? await supabase.storage.from("restaurant-images")
+                    .upload(logoPath, data: jpegData,
+                            options: FileOptions(contentType: "image/jpeg", upsert: true))
+                if let logoUrl = try? supabase.storage.from("restaurant-images").getPublicURL(path: logoPath) {
+                    try? await supabase.from("restaurants")
+                        .update(["image_url": logoUrl.absoluteString])
+                        .eq("id", value: finalId)
+                        .execute()
+                }
             }
             RePlateAuthService.shared.updateCurrentUser(
                 name: restaurantName.isEmpty ? (appState.currentUser?.name ?? "") : restaurantName,
@@ -1104,18 +1178,21 @@ struct LocationPickupEditView: View {
     private func loadAddress() async {
         guard let userId = appState.currentUser?.id else { return }
         struct Row: Decodable {
-            let id: String; let address: String?
-            enum CodingKeys: String, CodingKey { case id, address }
+            let id: String; let address: String?; let pickupInstructions: String?
+            enum CodingKeys: String, CodingKey {
+                case id, address; case pickupInstructions = "pickup_instructions"
+            }
         }
         do {
             let row: Row = try await supabase
                 .from("restaurants")
-                .select("id, address")
+                .select("id, address, pickup_instructions")
                 .eq("owner_id", value: userId)
                 .single()
                 .execute()
                 .value
             restaurantId = row.id
+            pickupInstructions = row.pickupInstructions ?? ""
             if let addr = row.address, !addr.isEmpty {
                 let parts = addr.components(separatedBy: ", ")
                 street = parts.count > 0 ? parts[0] : ""
@@ -1139,11 +1216,22 @@ struct LocationPickupEditView: View {
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
 
-        struct AddressPayload: Encodable { let address: String }
-        struct InsertPayload: Encodable {
-            let ownerId: String; let name: String; let address: String; let email: String
+        struct AddressPayload: Encodable {
+            let address: String; let pickupInstructions: String
             enum CodingKeys: String, CodingKey {
-                case name, address, email; case ownerId = "owner_id"
+                case address; case pickupInstructions = "pickup_instructions"
+            }
+        }
+        struct InsertPayload: Encodable {
+            let ownerId: String; let name: String; let address: String
+            let email: String; let pickupInstructions: String
+            let cuisine: [String]; let rating: Double; let totalReviews: Int
+            let verified: Bool; let isPremium: Bool
+            enum CodingKeys: String, CodingKey {
+                case name, address, email, cuisine, rating, verified
+                case ownerId = "owner_id"
+                case pickupInstructions = "pickup_instructions"
+                case totalReviews = "total_reviews"; case isPremium = "is_premium"
             }
         }
         struct IDRow: Decodable { let id: String }
@@ -1151,7 +1239,7 @@ struct LocationPickupEditView: View {
         do {
             if let id = restaurantId {
                 try await supabase.from("restaurants")
-                    .update(AddressPayload(address: fullAddress))
+                    .update(AddressPayload(address: fullAddress, pickupInstructions: pickupInstructions))
                     .eq("id", value: id)
                     .execute()
             } else {
@@ -1160,7 +1248,10 @@ struct LocationPickupEditView: View {
                         ownerId: userId,
                         name: appState.currentUser?.name ?? "My Restaurant",
                         address: fullAddress,
-                        email: appState.currentUser?.email ?? ""
+                        email: appState.currentUser?.email ?? "",
+                        pickupInstructions: pickupInstructions,
+                        cuisine: ["Other"],
+                        rating: 0.0, totalReviews: 0, verified: false, isPremium: false
                     ))
                     .select("id").single().execute().value
                 restaurantId = idRow.id
