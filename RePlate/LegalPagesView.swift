@@ -184,7 +184,7 @@ private struct PrivacyPolicyContent: View {
                     content: "We retain your information for as long as your account is active or as needed to provide services. You may request deletion of your account and associated data at any time through the app settings.")
 
             Section(title: "6. Your Rights",
-                    content: "Depending on your jurisdiction, you may have rights to access, correct, port, or delete your personal data. To exercise these rights, contact us at privacy@replate.app.")
+                    content: "Depending on your jurisdiction, you may have rights to access, correct, port, or delete your personal data. To exercise these rights, contact us at replateog@gmail.com.")
 
             Section(title: "7. Security",
                     content: "We use industry-standard encryption and security practices to protect your data. However, no system is completely secure, and we cannot guarantee the absolute security of your information.")
@@ -193,7 +193,7 @@ private struct PrivacyPolicyContent: View {
                     content: "The Platform is not directed to children under 13. We do not knowingly collect personal information from children under 13. If we become aware that we have collected such information, we will delete it promptly.")
 
             Section(title: "9. Contact Us",
-                    content: "Questions about this policy? Contact us at privacy@replate.app or write to RePlate, Inc., Privacy Team, San Francisco, CA.")
+                    content: "Questions about this policy? Contact us at replateog@gmail.com or write to RePlate, Inc., Privacy Team, McKinney, TX.")
         }
     }
 }
@@ -251,10 +251,10 @@ private struct TermsOfServiceContent: View {
                     content: "We may suspend or terminate accounts that violate these Terms. You may delete your account at any time through app settings.")
 
             Section(title: "11. Governing Law",
-                    content: "These Terms are governed by the laws of California, USA. Disputes shall be resolved through binding arbitration in San Francisco, CA.")
+                    content: "These Terms are governed by the laws of Texas, USA. Disputes shall be resolved through binding arbitration in McKinney, TX.")
 
             Section(title: "12. Contact",
-                    content: "Legal questions: legal@replate.app")
+                    content: "Legal questions: replateog@gmail.com")
         }
     }
 }
@@ -342,7 +342,7 @@ private struct FoodSafetyPolicyContent: View {
                     content: "Customers accept that surplus food may have a shorter shelf life than freshly prepared items. Customers should consume food promptly, store it properly, and report concerns immediately.")
 
             Section(title: "Reporting Food Safety Issues",
-                    content: "Report food safety concerns immediately through the in-app reporting feature or by emailing safety@replate.app. Serious health concerns should also be reported to local health authorities.")
+                    content: "Report food safety concerns immediately through the in-app reporting feature or by emailing replateog@gmail.com. Serious health concerns should also be reported to local health authorities.")
 
             Section(title: "Enforcement",
                     content: "Restaurants with verified food safety violations are immediately suspended pending investigation. Confirmed violations result in permanent removal from the Platform and may be reported to regulatory authorities.")
@@ -386,7 +386,7 @@ private struct RefundPolicyContent: View {
                     content: "Approved refunds are returned to your original payment method within 3–7 business days, depending on your bank. RePlate credits may be offered as an alternative with faster processing.")
 
             Section(title: "Disputes",
-                    content: "If you disagree with a refund decision, you may escalate to support@replate.app within 14 days of the original decision. Escalated cases are reviewed by our Trust & Safety team.")
+                    content: "If you disagree with a refund decision, you may escalate to replateog@gmail.com within 14 days of the original decision. Escalated cases are reviewed by our Trust & Safety team.")
 
             Section(title: "Platform Service Fees",
                     content: "RePlate's platform service fee is non-refundable except in cases where the order was cancelled by the restaurant or a technical error occurred on our side.")
@@ -433,7 +433,7 @@ private struct DataPolicyContent: View {
             ])
 
             Section(title: "Your Data Rights",
-                    content: "You have the right to: access a copy of your data, correct inaccurate data, request deletion, restrict processing, port your data to another service, and object to processing for direct marketing. To exercise any right, visit Settings > Privacy > Manage My Data or email privacy@replate.app.")
+                    content: "You have the right to: access a copy of your data, correct inaccurate data, request deletion, restrict processing, port your data to another service, and object to processing for direct marketing. To exercise any right, visit Settings > Privacy > Manage My Data or email replateog@gmail.com.")
 
             Section(title: "Data Deletion",
                     content: "When you delete your account: profile data is deleted within 30 days, transaction records are retained for 7 years for legal and tax compliance, aggregated anonymised impact statistics may be retained indefinitely.")
@@ -442,7 +442,7 @@ private struct DataPolicyContent: View {
                     content: "The RePlate mobile app uses local storage (not browser cookies) to maintain your session and preferences. We use analytics SDKs that collect anonymised, aggregated usage data. We do not use cross-app tracking.")
 
             Section(title: "Contact",
-                    content: "For data-related questions: privacy@replate.app\nData Protection Officer: dpo@replate.app")
+                    content: "For data-related questions: replateog@gmail.com\nData Protection Officer: replateog@gmail.com")
         }
     }
 }
@@ -483,7 +483,7 @@ private struct FAQContent: View {
         ),
         FAQItem(
             question: "How do I report a problem with a restaurant or user?",
-            answer: "Tap the ⋯ button in any conversation to report or block a user. You can also email support@replate.app or use Help & Support > Report a Problem in your Profile tab."
+            answer: "Tap the ⋯ button in any conversation to report or block a user. You can also email replateog@gmail.com or use Help & Support > Report a Problem in your Profile tab."
         ),
         FAQItem(
             question: "How do I delete my account?",
@@ -491,7 +491,7 @@ private struct FAQContent: View {
         ),
         FAQItem(
             question: "How can I contact support?",
-            answer: "Email us at support@replate.app. You can also reach us via Profile > Help & Support > Contact Support."
+            answer: "Email us at replateog@gmail.com. You can also reach us via Profile > Help & Support > Contact Support."
         ),
     ]
 
